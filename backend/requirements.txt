@@ -1,0 +1,12 @@
+dj-database-url==1.3.0
+Django==4.2
+django-admin-inline-paginator==0.4.0
+django-extensions==3.2.1
+django-ninja==0.21.0
+environs==9.5.0
+flake8==6.0.0
+ipython==8.12.0
+jellyfish==0.11.2
+notebook==6.5.4
+psycopg2==2.9.6
+tqdm==4.65.0
