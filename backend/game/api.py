@@ -1,0 +1,210 @@
+from typing import Optional
+
+from django.shortcuts import get_object_or_404
+from ninja import Router, Field, Schema
+from .models import Topic, TopicEntity, Player, Round, Answer, Config
+
+router = Router()
+
+
+class Message200(Schema):
+    detail: str
+
+
+class Message403(Schema):
+    detail: str
+
+
+class Message404(Schema):
+    detail: str
+
+
+class PlayerInSchema(Schema):
+    telegram_id: int = 1
+    telegram_username: Optional[str]
+    name: Optional[str]
+
+
+class PlayerOutSchema(Schema):
+    id: int
+    displayed_name: str
+    average_score: int
+    position: int = None
+    rank: int = None
+
+
+@router.post('/player', response={200: PlayerOutSchema})
+def find_player(request, data: PlayerInSchema):
+    player = Player.find(
+        telegram_id=data.telegram_id,
+        telegram_username=data.telegram_username,
+        name=data.name
+    )
+    return player
+
+
+@router.get('/rating', response={200: list[PlayerOutSchema]})
+def get_rating(request):
+    return Player.objects.top(10)
+
+
+class ReferrerSchema(Schema):
+    player_id: int
+    referrer_id: int
+
+
+@router.put('/player', response={200: Message200, 404: Message404})
+def put_player(request, data: ReferrerSchema):
+    player = Player.find(id=data.player_id)
+    if not player.referrer:
+        player.referrer = Player.find(id=data.referrer_id)
+    return {'detail': 'ok'}
+
+
+class TopicSchema(Schema):
+    id: int
+    title: str
+
+
+@router.get('/topic', response={200: TopicSchema, 404: Message404})
+def get_topic(request, topic_id: int):
+    topic = Topic.find(id=topic_id)
+    return topic
+
+
+@router.get('/random-topics', response={200: list[TopicSchema], 403: Message403})
+def get_random_topics(request, player_id: int):
+    player = Player.find(player_id=player_id)
+    if player.assigned_topics:
+        return list(Topic.objects.assigned_to(player))
+    topics = Topic.objects.exclude_played_by(player)
+    if not topics:
+        return 403, {'detail': 'Не осталось доступных тем для данного игрока'}
+    random_topics = topics.for_level(player.level).random(Config.topics_count)
+    if random_topics.count() < Config.topics_count:
+        random_topics = topics.random(Config.topics_count)
+    player.assign_topics(random_topics)
+    return list(random_topics)
+
+
+class RoundInSchema(Schema):
+    player_id: int
+    topic_id: int
+
+
+class RoundOutSchema(Schema):
+    id: int
+    attempts_left: int = Config.attempts_count
+
+
+@router.post('/round', response={200: RoundOutSchema, 403: Message403, 404: Message404})
+def start_round(request, data: RoundInSchema):
+    player = Player.find(player_id=data.player_id)
+    player.clear_assigned_topics()
+    round, created = Round.objects.get_or_create(player1=player, topic_id=data.topic_id)
+    if created:
+        round.update_bot_answers()
+        return {'id': round.id}
+    return 403, {'detail': 'Тема уже сыграна'}
+
+
+class FeedbackSchema(Schema):
+    round_id: int
+    feedback: str
+    player: int = 1
+
+
+@router.put('/round', response={200: Message200, 404: Message404})
+def feedback(request, data: FeedbackSchema):
+    round = get_object_or_404(Round, id=data.round_id)
+    round.add_feedback(data.feedback, data.player)
+    return {'detail': 'ok'}
+
+
+class AnswerSchema(Schema):
+    round_id: int
+    answer: str
+    entity_id: int = None
+
+
+class TopicEntitySchema(Schema):
+    id: int
+    title: str = Field(..., alias='entity.title')
+    position: int
+    points: int
+    # share: float
+
+
+class AttemptSchema(Schema):
+    attempts_left: int = 0
+    entities: list[TopicEntitySchema] = None
+    bot_answer: str = None
+    bot_answer_entity: TopicEntitySchema = None
+    skipped: bool = False
+
+
+@router.post('/answer', response={200: AttemptSchema, 403: Message403, 404: Message404})
+def answer(request, data: AnswerSchema):
+    round = get_object_or_404(Round, id=data.round_id)
+    attempts_left = round.attempts_left
+    if not attempts_left:
+        return 403, {'detail': 'Все попытки использованы'}
+
+    skipped = data.answer == '-'
+
+    if data.entity_id:
+        topic_entity = get_object_or_404(TopicEntity, id=data.entity_id)
+        created = Answer.get_or_create(round=round, topic_entity=topic_entity, text=data.answer)
+        if not created:
+            return 403, {'detail': 'Этот ответ засчитан, введите другой'}
+        bot_answer, bot_answer_entity = round.get_bot_answer()
+        return {
+            'attempts_left': attempts_left - 1,
+            'entities': [topic_entity],
+            'bot_answer': bot_answer,
+            'bot_answer_entity': bot_answer_entity
+        }
+
+    topic_entities = round.topic.get_matching_entities(data.answer) if not skipped else None
+    if not topic_entities:
+        if not skipped:
+            created = Answer.get_or_create(round=round, text=data.answer)
+            if not created:
+                return 403, {'detail': 'Этот ответ засчитан, введите другой'}
+        bot_answer, bot_answer_entity = round.get_bot_answer()
+        return {
+            'attempts_left': attempts_left - 1,
+            'bot_answer': bot_answer,
+            'bot_answer_entity': bot_answer_entity,
+            'skipped': skipped
+        }
+    elif len(topic_entities) == 1:
+        created = Answer.get_or_create(round=round, topic_entity=topic_entities[0], text=data.answer)
+        if not created:
+            return 403, {'detail': 'Этот ответ засчитан, введите другой'}
+        bot_answer, bot_answer_entity = round.get_bot_answer()
+        return {
+            'attempts_left': attempts_left - 1,
+            'entities': topic_entities,
+            'bot_answer': bot_answer,
+            'bot_answer_entity': bot_answer_entity
+        }
+
+    return {
+        'attempts_left': attempts_left,
+        'entities': topic_entities
+    }
+
+
+class FinishSchema(Schema):
+    round_id: int
+    score1: int = 0
+    score2: int = 0
+    abort: bool = False
+
+
+@router.post('/finish', response={200: Message200, 404: Message404})
+def finish_round(request, data: FinishSchema):
+    round = get_object_or_404(Round, id=data.round_id)
+    round.finish(score1=data.score1, score2=data.score2, abort=data.abort)
+    return {'detail': 'ok'}
