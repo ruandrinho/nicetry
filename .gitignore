@@ -1,6 +1,8 @@
 .vscode/
 *.ipynb
 test.py
+data.json
+hints.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
