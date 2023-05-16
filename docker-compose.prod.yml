@@ -3,15 +3,17 @@ services:
 
   backend:
     build: ./backend
-    volumes:
-      - ./backend:/backend
-    ports:
-      - "8000:8000"
-    command: python manage.py runserver 0.0.0.0:8000
+    expose:
+      - 8000
+    command: gunicorn guesstop.wsgi:application --bind 0.0.0.0:8000
+    env_file:
+      - ./backend/.env.prod
     depends_on:
       - db
     environment:
       - DB_HOST=db
+    volumes:
+      - static_volume:/backend/static
     restart: unless-stopped
 
   bot:
@@ -38,8 +40,18 @@ services:
   redis:
     image: redis:latest
     ports:
-      - "6379:6379"
+      - 6379:6379
     restart: unless-stopped
+
+  nginx:
+    build: ./nginx
+    ports:
+      - 1337:80
+    depends_on:
+      - backend
+    volumes:
+      - static_volume:/backend/static
 
 volumes:
   postgres_data:
+  static_volume:

@@ -10,7 +10,7 @@ from handlers import game_router
 
 async def main() -> None:
     bot = Bot(TG_TOKEN, parse_mode='HTML')
-    redis = Redis(host='localhost')
+    redis = Redis(host='redis')
     storage = RedisStorage(redis=redis)
     dp = Dispatcher(storage=storage)
     dp.include_router(game_router)

@@ -3,6 +3,8 @@
 test.py
 data.json
 hints.txt
+.env.prod
+.env.db
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
