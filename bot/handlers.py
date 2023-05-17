@@ -21,7 +21,7 @@ logging.basicConfig(
     format='[%(asctime)s: %(levelname)s] %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler('/var/log/bot.log')
+        logging.FileHandler('bot.log')
     ]
 )
 logger = logging.getLogger(__name__)
