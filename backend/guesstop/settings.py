@@ -133,3 +133,23 @@ OPENAI_KEY = env('OPENAI_KEY')
 OPENAI_ID = env('OPENAI_ID')
 
 CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', 'http://127.0.0.1')
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "level": "INFO",
+            "class": "logging.StreamHandler",
+        },
+        "file": {
+            "level": "INFO",
+            "class": "logging.FileHandler",
+        },
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console", "file"],
+        },
+    },
+}
