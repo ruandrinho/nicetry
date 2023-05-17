@@ -45,8 +45,13 @@ async def handle_command_start(
     if command and command.args:
         challenged_topic_id, referrer_id = await decode_referral(command.args)
         if challenged_topic_id > 0 and challenged_topic_id < 2000:
-            await state.update_data(challenged_topic_id=challenged_topic_id, referrer_id=referrer_id)
+            await state.update_data(challenged_topic_id=challenged_topic_id, referrer_id=referrer_id)    
     user_data = await state.get_data()
+    logger.debug(user_data)
+    if message.from_user.username == 'NiceTryGameBot' and 'player' not in user_data:
+        await message.answer('Наберите ещё раз /start')
+        await state.set_state(None)
+        return
     if 'player' not in user_data:
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -107,7 +112,8 @@ async def handle_interruption_confirmation(callback: CallbackQuery, state: FSMCo
         await state.set_data({'player': user_data['player'], 'round_is_finished': True})
         await handle_command_start(message=callback.message, state=state)
         return
-    await state.set_data({'player': user_data['player']})
+    # await state.set_data({'player': user_data['player']})
+    await state.set_data({})
     await handle_command_start(message=callback.message, state=state)
 
 

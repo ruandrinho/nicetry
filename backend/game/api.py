@@ -1,4 +1,4 @@
-# from typing import Optional
+from typing import Optional
 
 from django.shortcuts import get_object_or_404
 from ninja import Router, Field, Schema
@@ -21,8 +21,8 @@ class Message404(Schema):
 
 class PlayerInSchema(Schema):
     telegram_id: int = 1
-    telegram_username: str = ''
-    name: str = ''
+    telegram_username: Optional[str] = None
+    name: Optional[str] = None
 
 
 class PlayerOutSchema(Schema):
@@ -35,6 +35,10 @@ class PlayerOutSchema(Schema):
 
 @router.post('/player', response={200: PlayerOutSchema})
 def find_player(request, data: PlayerInSchema):
+    if not data.telegram_username:
+        data.telegram_username = ''
+    if not data.name:
+        data.name = ''
     player = Player.find(
         telegram_id=data.telegram_id,
         telegram_username=data.telegram_username,
