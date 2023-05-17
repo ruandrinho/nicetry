@@ -9,6 +9,14 @@ from handlers import game_router
 
 
 async def main() -> None:
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='[%(asctime)s: %(levelname)s] %(message)s',
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler('/var/log/bot.log')
+        ]
+    )
     bot = Bot(TG_TOKEN, parse_mode='HTML')
     redis = Redis(host='redis')
     storage = RedisStorage(redis=redis)
@@ -18,5 +26,4 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG, format='[%(asctime)s: %(levelname)s] %(message)s')
     asyncio.run(main())
