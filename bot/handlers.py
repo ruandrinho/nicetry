@@ -16,6 +16,14 @@ from utils import format_rating, format_hits, format_player, encode_referral, de
 
 game_router = Router()
 
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='[%(asctime)s: %(levelname)s] %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('/var/log/bot.log')
+    ]
+)
 logger = logging.getLogger(__name__)
 
 
