@@ -45,7 +45,7 @@ async def handle_command_start(
     if command and command.args:
         challenged_topic_id, referrer_id = await decode_referral(command.args)
         if challenged_topic_id > 0 and challenged_topic_id < 2000:
-            await state.update_data(challenged_topic_id=challenged_topic_id, referrer_id=referrer_id)    
+            await state.update_data(challenged_topic_id=challenged_topic_id, referrer_id=referrer_id)
     user_data = await state.get_data()
     logger.debug(user_data)
     if message.from_user.username == 'NiceTryGameBot' and 'player' not in user_data:
@@ -290,7 +290,7 @@ async def handle_message_answer(message: Message, state: FSMContext, bot: Bot) -
         await state.update_data(ambiguous_answer=message.text)
         buttons = [[(entity['title'], f'id{entity["id"]}')] for entity in result['entities']]
         await message.answer(
-            Message.ambiguity,
+            Messages.ambiguity,
             reply_markup=await get_keyboard(buttons)
         )
         return
@@ -337,7 +337,15 @@ async def handle_query_answer(callback: CallbackQuery, state: FSMContext, bot: B
                                f'{decoded_response["detail"]}')
                 return
             result = await response.json()
-    await handle_hit(callback.message, state, result, bot=bot)
+            entity = result['entities'][0]
+    await handle_hit(callback.message, state, entity, bot=bot)
+    await callback.message.answer(Messages.bot_answer.replace('ANSWER', result['bot_answer']))
+    await handle_hit(callback.message, state, result['bot_answer_entity'], from_bot=True, bot=bot)
+    attempts_left_message = getattr(Messages, f'left{result["attempts_left"]}')
+    new_message = await callback.message.answer(attempts_left_message)
+    await state.update_data(new_message_id=new_message.message_id)
+    if not result['attempts_left']:
+        await handle_results(callback.message, state, bot)
     await callback.message.delete()
     await callback.answer()
 
