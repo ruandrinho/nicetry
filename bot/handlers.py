@@ -49,7 +49,7 @@ async def handle_command_start(
     user_data = await state.get_data()
     logger.debug(user_data)
     if message.from_user.username == 'NiceTryGameBot' and 'player' not in user_data:
-        await message.answer('Наберите ещё раз /start')
+        await message.answer(Messages.start_again)
         await state.set_state(None)
         return
     if 'player' not in user_data:
@@ -460,6 +460,20 @@ async def handle_feedback_message(message: Message, state: FSMContext) -> None:
         )
     )
     await state.set_state(GameStates.main)
+
+
+@game_router.message(F.text)
+async def handle_any_message(message: Message, state: FSMContext) -> None:
+    await handle_default(message, state)
+
+
+@game_router.callback_query()
+async def handle_any_callback(callback: CallbackQuery, state: FSMContext) -> None:
+    await handle_default(callback.message, state)
+
+
+async def handle_default(message: Message, state: FSMContext) -> None:
+    await message.answer(Messages.default)
 
 
 async def handle_error_response(callback: CallbackQuery, state: FSMContext, error_message: str) -> None:
