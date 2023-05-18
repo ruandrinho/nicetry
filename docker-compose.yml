@@ -31,8 +31,6 @@ services:
     image: postgres:latest
     volumes:
       - postgres_data:/var/lib/postgresql/data/
-    environment:
-      - ./.env.db
     restart: unless-stopped
 
   redis:
