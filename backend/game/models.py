@@ -445,7 +445,7 @@ class Round(models.Model):
 
     @property
     def attempts_left(self) -> int:
-        return max(0, int((10 - self.answers.count()) / 2))
+        return max(0, 5 - self.answers.filter(player=2).count())
 
     @property
     def outcome(self) -> str:
