@@ -400,6 +400,7 @@ class Round(models.Model):
     objects = RoundQuerySet.as_manager()
 
     class Meta:
+        ordering = ['-started_at']
         unique_together = ['player1', 'player2', 'topic']
 
     def __str__(self) -> str:
@@ -499,7 +500,8 @@ class Answer(models.Model):
                 defaults={'player': player, 'text': text, 'position': topic_entity.position}
             )
             round.shorten_bot_answers(topic_entity.id)
-            topic_entity.increment_answers_count()
+            if player == 1:
+                topic_entity.increment_answers_count()
         else:
             _, created = cls.objects.get_or_create(
                 round=round,
