@@ -1,5 +1,6 @@
 from typing import Any
 
+from django import forms
 from django.contrib import admin
 from django.http.request import HttpRequest
 from django_admin_inline_paginator.admin import TabularInlinePaginated
@@ -59,7 +60,7 @@ class EntityAdmin(admin.ModelAdmin):
 @admin.register(TopicEntity)
 class TopicEntityAdmin(admin.ModelAdmin):
     list_display = ['topic', 'entity', 'position', 'answers_count']
-    raw_id_fields = ['topic', 'entity']
+    autocomplete_fields = ['topic', 'entity']
     search_fields = ['topic__title', 'entity__title']
 
     def save_model(self, request: Any, obj: TopicEntity, form: Any, change: Any) -> None:
@@ -103,18 +104,25 @@ class PlayerAdmin(admin.ModelAdmin):
 
 @admin.register(Round)
 class RoundAdmin(admin.ModelAdmin):
-    list_display = ['__str__', 'score1', 'score2', 'finished_at']
+    list_display = ['__str__', 'score1', 'score2', 'player1_answers', 'player2_answers', 'finished_at']
     list_filter = ['started_at', 'finished_at']
     readonly_fields = [
-        'player1', 'player2', 'topic', 'duel', 'score1', 'score2', 'finished_at', 'bot_answers', 'player1_feedback',
-        'player2_feedback'
+        'player1', 'player2', 'topic', 'duel', 'score1', 'score2', 'player1_answers', 'player2_answers', 'finished_at',
+        'bot_answers', 'player1_feedback', 'player2_feedback'
     ]
+
+
+class AnswerAdminForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['topic_entity'].queryset = self.instance.round.topic.entities.all()
 
 
 @admin.register(Answer)
 class AnswerAdmin(admin.ModelAdmin):
     list_display = ['text', 'player', 'position', 'round', 'topic_entity']
     list_filter = [('topic_entity', admin.EmptyFieldListFilter), 'sent_at']
-    raw_id_fields = ['round', 'topic_entity']
     readonly_fields = ['round', 'text', 'player', 'position']
     search_fields = ['text', 'topic_entity__topic__title', 'topic_entity__entity__title']
+
+    form = AnswerAdminForm
