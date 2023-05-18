@@ -251,7 +251,7 @@ class Entity(models.Model):
 
 
 class TopicEntity(models.Model):
-    topic = models.ForeignKey(Topic, verbose_name='Тема', on_delete=models.CASCADE)
+    topic = models.ForeignKey(Topic, verbose_name='Тема', on_delete=models.CASCADE, related_name='topic_entities')
     entity = models.ForeignKey(Entity, verbose_name='Сущность', on_delete=models.CASCADE)
     position = models.PositiveSmallIntegerField('Место', db_index=True, default=100)
     answers_count = models.PositiveIntegerField('Количество ответов', default=0)

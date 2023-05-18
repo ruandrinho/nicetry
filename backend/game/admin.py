@@ -115,7 +115,7 @@ class RoundAdmin(admin.ModelAdmin):
 class AnswerAdminForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['topic_entity'].queryset = self.instance.round.topic.entities.all()
+        self.fields['topic_entity'].queryset = self.instance.round.topic.topic_entities.all()
 
 
 @admin.register(Answer)
