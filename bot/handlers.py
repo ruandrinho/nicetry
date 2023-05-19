@@ -174,8 +174,12 @@ async def handle_query_rating(callback: CallbackQuery, state: FSMContext) -> Non
 
 
 @game_router.callback_query(Text('game'), GameStates.main)
+@game_router.callback_query(Text('game_again'), GameStates.main)
 async def handle_query_game(callback: CallbackQuery, state: FSMContext) -> None:
     user_data = await state.get_data()
+    if 'round_is_finished' in user_data and user_data['round_is_finished']:
+        await state.update_data(round_is_finished=False)
+        after_results = True
     if 'challenged_topic_id' in user_data:
         async with aiohttp.ClientSession() as session:
             async with session.put(
@@ -219,8 +223,11 @@ async def handle_query_game(callback: CallbackQuery, state: FSMContext) -> None:
         Messages.choose_topic,
         reply_markup=await get_keyboard(buttons)
     )
-    await state.update_data(new_message_id=new_message.message_id)
-    await callback.message.delete()
+    await state.update_data(new_message_id=new_message.message_id)    
+    if after_results:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    else:
+        await callback.message.delete()
     await callback.answer()
     await state.set_state(GameStates.topic)
 
@@ -412,7 +419,7 @@ async def handle_results(message: Message, state: FSMContext, bot: Bot) -> None:
         Images.results,
         f'{outcome_message}\n\n{formatted_results}',
         reply_markup=await get_keyboard(
-            [['main', 'feedback', 'challenge']],
+            [['main', 'game_again'], ['feedback', 'challenge']],
             deeplink=deeplink,
             challenge_message=challenge_message
         )
