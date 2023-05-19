@@ -175,7 +175,7 @@ async def handle_query_rating(callback: CallbackQuery, state: FSMContext) -> Non
 
 @game_router.callback_query(Text('game'), GameStates.main)
 @game_router.callback_query(Text('game_again'), GameStates.main)
-async def handle_query_game(callback: CallbackQuery, state: FSMContext) -> None:
+async def handle_query_game(callback: CallbackQuery, state: FSMContext, after_results: bool = False) -> None:
     user_data = await state.get_data()
     if 'round_is_finished' in user_data and user_data['round_is_finished']:
         await state.update_data(round_is_finished=False)
