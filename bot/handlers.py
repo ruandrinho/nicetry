@@ -412,7 +412,7 @@ async def handle_results(message: Message, state: FSMContext, bot: Bot) -> None:
     else:
         outcome_message = Messages.outcome_defeat.replace('RESULT', outcome)
     challenge_message = Messages.challenge.replace('TOPIC', user_data['topic_title']).replace('RESULT', outcome_message)
-    deeplink = f'https://t.me/GuesstopBot?start={referral}'
+    deeplink = f'https://t.me/NiceTryGameBot?start={referral}'
     formatted_results = await format_hits(user_data['hits'])
     await bot.unpin_chat_message(chat_id=message.chat.id, message_id=user_data['pinned_message_id'])
     await message.answer_photo(
