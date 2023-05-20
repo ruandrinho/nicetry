@@ -28,9 +28,8 @@ class PlayerInSchema(Schema):
 class PlayerOutSchema(Schema):
     id: int
     displayed_name: str
-    average_score: int
+    rating: int
     position: int = None
-    rank: int = None
 
 
 @router.post('/player', response={200: PlayerOutSchema})

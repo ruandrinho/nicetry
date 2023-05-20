@@ -300,6 +300,7 @@ class Player(models.Model):
     defeats = models.PositiveSmallIntegerField('Число поражений', default=0)
     draws = models.PositiveSmallIntegerField('Число ничьих', default=0)
     average_score = models.PositiveSmallIntegerField('Среднее число очков', default=0)
+    rating = models.PositiveSmallIntegerField('Рейтинг против бота', default=0)
     level = models.PositiveSmallIntegerField('Уровень', default=3)
     duel_victories = models.PositiveSmallIntegerField('Число побед в дуэлях', default=0)
     duel_defeats = models.PositiveSmallIntegerField('Число поражений в дуэлях', default=0)
@@ -348,11 +349,16 @@ class Player(models.Model):
 
     def update_statistics(self) -> None:
         finished_rounds = self.rounds.finished()
-        average_score = finished_rounds.aggregate(avg=Avg('score1'))['avg']
+        average_score = finished_rounds.aggregate(avg=Avg('score1'))['avg'] or 0
         self.average_score = round(average_score)
         self.victories = finished_rounds.filter(score1__gt=F('score2')).count()
         self.defeats = finished_rounds.filter(score1__lt=F('score2')).count()
         self.draws = finished_rounds.filter(score1=F('score2')).count()
+        last10_rounds = self.rounds.last_finished(10)
+        last10_points = sum(round.score1 for round in last10_rounds)
+        last10_victories = sum(1 for round in last10_rounds if round.score1 > round.score2)
+        last10_draws = sum(1 for round in last10_rounds if round.score1 == round.score2)
+        self.rating = last10_points + last10_victories * 40 + last10_draws * 20
         for i, value in enumerate(Config.topic_levels):
             if self.average_score < value:
                 self.level = i
