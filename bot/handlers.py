@@ -325,7 +325,10 @@ async def handle_message_answer(message: Message, state: FSMContext, bot: Bot) -
             await message.answer(Messages.miss)
     elif not result['skipped']:
         await message.answer(Messages.miss)
-    await message.answer(Messages.bot_answer.replace('ANSWER', result['bot_answer']))
+    bot_answer = Messages.bot_answer.replace('ANSWER', result['bot_answer'])
+    if result['bot_answer_entity']['position'] > 10:
+        bot_answer += Messages.bot_miss
+    await message.answer(bot_answer)
     await handle_hit(message, state, result['bot_answer_entity'], from_bot=True, bot=bot)
     attempts_left_message = getattr(Messages, f'left{result["attempts_left"]}')
     new_message = await message.answer(attempts_left_message)
@@ -363,7 +366,7 @@ async def handle_query_answer(callback: CallbackQuery, state: FSMContext, bot: B
     await handle_hit(callback.message, state, entity, bot=bot)
     bot_answer = Messages.bot_answer.replace('ANSWER', result['bot_answer'])
     if result['bot_answer_entity']['position'] > 10:
-        bot_answer += ' (он не попал в десятку)'
+        bot_answer += Messages.bot_miss
     await callback.message.answer(bot_answer)
     await handle_hit(callback.message, state, result['bot_answer_entity'], from_bot=True, bot=bot)
     attempts_left_message = getattr(Messages, f'left{result["attempts_left"]}')

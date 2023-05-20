@@ -15,6 +15,7 @@ DEV_BOT = env.bool('DEV_BOT')
 class Messages():
     ambiguity = 'Какой ответ вы имели в виду?'
     bot_answer = 'Ответ соперника: ANSWER'
+    bot_miss = ' (он не попал в десятку)'
     challenge = dedent('''\
         Приглашаю сыграть тему «TOPIC» в игре GuessTop против ChatGPT.
         RESULT. Сможешь улучшить?
