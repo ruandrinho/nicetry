@@ -1,15 +1,14 @@
 import asyncio
 
 from aiogram import Bot, Dispatcher
-from aiogram.fsm.storage.redis import RedisStorage, Redis
+from aiogram.fsm.storage.redis import RedisStorage
 
 from config import TG_TOKEN
-from handlers import game_router
+from handlers import game_router, redis
 
 
 async def main() -> None:
-    bot = Bot(TG_TOKEN, parse_mode='HTML')
-    redis = Redis(host='redis')
+    bot = Bot(TG_TOKEN, parse_mode='HTML')    
     storage = RedisStorage(redis=redis)
     dp = Dispatcher(storage=storage)
     dp.include_router(game_router)

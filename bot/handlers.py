@@ -9,10 +9,18 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, Text, CommandObject, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup, default_state
+from aiogram.fsm.storage.redis import Redis
 from aiogram.types import CallbackQuery, Message
 
-from config import Messages, Images, API
-from utils import format_rating, format_hits, format_player, encode_referral, decode_referral, get_keyboard
+from config import Messages, Images, API, OPEN
+from utils import (
+    decode_referral,
+    encode_referral,
+    format_hits,
+    format_player,
+    format_rating,
+    get_keyboard
+)
 
 game_router = Router()
 
@@ -25,6 +33,8 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+redis = Redis(host='redis', decode_responses=True)
 
 
 class GameStates(StatesGroup):
@@ -39,16 +49,19 @@ class GameStates(StatesGroup):
 async def handle_command_start(
         message: Message,
         state: FSMContext,
+        bot: Bot,
         command: CommandObject = None,
         after_results: bool = False
 ) -> None:
+    if await check_closed_game(message, bot):
+        return
     if command and command.args:
         challenged_topic_id, referrer_id = await decode_referral(command.args)
         if challenged_topic_id > 0 and challenged_topic_id < 2000:
             await state.update_data(challenged_topic_id=challenged_topic_id, referrer_id=referrer_id)
     user_data = await state.get_data()
-    logger.debug(user_data)
-    if message.from_user.username == 'NiceTryGameBot' and 'player' not in user_data:
+    username = message.from_user.username
+    if (username == 'NiceTryGameBot' or username == 'NiceTryDevBot') and 'player' not in user_data:
         await message.answer(Messages.start_again)
         await state.set_state(None)
         return
@@ -58,7 +71,7 @@ async def handle_command_start(
                 f'{API}/player',
                 json={
                     'telegram_id': message.from_user.id,
-                    'telegram_username': message.from_user.username,
+                    'telegram_username': username,
                     'name': f'{message.from_user.first_name} {message.from_user.last_name}'.strip()
                 }
             ) as response:
@@ -114,7 +127,7 @@ async def handle_interruption_confirmation(callback: CallbackQuery, state: FSMCo
         return
     # await state.set_data({'player': user_data['player']})
     await state.set_data({})
-    await handle_command_start(message=callback.message, state=state)
+    await handle_command_start(message=callback.message, state=state, bot=bot)
 
 
 @game_router.callback_query(Text('go_on'), GameStates.interruption)
@@ -127,14 +140,14 @@ async def handle_interruption_cancel(callback: CallbackQuery, state: FSMContext)
 
 
 @game_router.callback_query(Text('main'))
-async def handle_query_main(callback: CallbackQuery, state: FSMContext) -> None:
+async def handle_query_main(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     user_data = await state.get_data()
     after_results = False
     if 'round_is_finished' in user_data and user_data['round_is_finished']:
         await state.update_data(round_is_finished=False)
         after_results = True
     await callback.answer()
-    await handle_command_start(message=callback.message, state=state, after_results=after_results)
+    await handle_command_start(message=callback.message, state=state, bot=bot, after_results=after_results)
 
 
 @game_router.callback_query(Text('rules'), GameStates.main)
@@ -175,7 +188,9 @@ async def handle_query_rating(callback: CallbackQuery, state: FSMContext) -> Non
 
 @game_router.callback_query(Text('game'), GameStates.main)
 @game_router.callback_query(Text('game_again'), GameStates.main)
-async def handle_query_game(callback: CallbackQuery, state: FSMContext, after_results: bool = False) -> None:
+async def handle_query_game(callback: CallbackQuery, state: FSMContext, bot: Bot, after_results: bool = False) -> None:
+    if await check_closed_game(callback.message, bot):
+        return
     user_data = await state.get_data()
     if 'round_is_finished' in user_data and user_data['round_is_finished']:
         await state.update_data(round_is_finished=False)
@@ -223,7 +238,7 @@ async def handle_query_game(callback: CallbackQuery, state: FSMContext, after_re
         Messages.choose_topic,
         reply_markup=await get_keyboard(buttons)
     )
-    await state.update_data(new_message_id=new_message.message_id)    
+    await state.update_data(new_message_id=new_message.message_id)
     if after_results:
         await callback.message.edit_reply_markup(reply_markup=None)
     else:
@@ -499,3 +514,21 @@ async def handle_error_response(callback: CallbackQuery, state: FSMContext, erro
     await callback.message.delete()
     await callback.answer()
     await state.set_state(GameStates.main)
+
+
+async def check_closed_game(message: Message, bot: Bot) -> bool:
+    alert_queue = await redis.get('alert_queue')
+    if OPEN:
+        if not alert_queue:
+            return False
+        alert_queue = set(map(int, alert_queue.split()))
+        for id in alert_queue:
+            await bot.send_message(id, Messages.open, disable_notification=True)
+            logger.info(f'GAME Open alert sent to user {id}')
+        await redis.set('alert_queue', '')
+        return False
+    await message.answer(Messages.closed)
+    alert_queue = message.chat.id if not alert_queue else f'{alert_queue} {message.chat.id}'
+    await redis.set('alert_queue', alert_queue)
+    logger.info(f'GAME Queued user {message.chat.id}')
+    return True

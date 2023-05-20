@@ -8,6 +8,8 @@ env.read_env()
 API = env('API')
 TG_TOKEN = env('TG_TOKEN')
 LOGO_URL = 'https://lh3.googleusercontent.com/drive-viewer/AFGJ81rjGM-HN9T1IGotrw0PpjcQ-9qJGuK5tpjmCNSP5VMUovhR_zrqyuuZkekF1_xgQGkJ_d7YNLqQNJAweCzAsEniQdbd=s1600'  # noqa
+OPEN = env.bool('OPEN')
+DEV_BOT = env.bool('DEV_BOT')
 
 
 class Messages():
@@ -18,6 +20,10 @@ class Messages():
         RESULT. Сможешь улучшить?
         Перейди по ссылке и нажми кнопку START''')
     choose_topic = 'Выберите одну из трёх тем'
+    closed = dedent('''\
+        Игра временно не работает.
+        Андрей фиксит баги и внедряет новые фичи.
+        Отправим сообщение, когда всё наладится''')
     confirm_interruption = 'Действительно хотите прервать текущий раунд?'
     default = 'Что-то пошло не так? Для выхода в главное меню нажмите /start'
     feedback = 'Напишите в свободной форме о любой встреченной ошибке либо свои замечания и предложения'
@@ -30,6 +36,7 @@ class Messages():
     left4 = 'Что ещё знаете по этой теме? У вас 4 попытки'
     left5 = 'У вас есть 5 попыток, чтобы угадать самые популярные ответы этой темы. Начинайте:'
     miss = 'Этот ответ не входит в десятку популярных'
+    open = 'Игра снова работает'
     outcome_defeat = 'Итоговый счёт — RESULT в пользу ChatGPT'
     outcome_draw = 'Итоговый счёт — RESULT'
     outcome_victory = 'Итоговый счёт — RESULT в вашу пользу'
@@ -58,3 +65,11 @@ class Images():
     rating = 'AgACAgIAAxkDAAMPZGDnb89EZau-81uGZZBuU6gb30gAAmrHMRt8fAFLTQ0WmYjaMeUBAAMCAAN5AAMvBA'
     results = 'AgACAgIAAxkDAAMQZGDncKIAAeQvXK4E1PkYRTvRQA4KAAJrxzEbfHwBS_dYvIRp1cYPAQADAgADeQADLwQ'
     rules = 'AgACAgIAAxkDAAMRZGDncCMbdbefqwsXQJM7OyequQIAAmzHMRt8fAFLM5OPz8PapL0BAAMCAAN5AAMvBA'
+
+
+if DEV_BOT:
+    white = 'https://bourayne-preissl.com/wp-content/uploads/2016/03/Reticular-Tissue-White-Seamless-Texture.jpg'
+    Images.main = white
+    Images.rating = white
+    Images.results = white
+    Images.rules = white
