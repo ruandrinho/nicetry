@@ -50,6 +50,7 @@ async def handle_command_start(
         message: Message,
         state: FSMContext,
         bot: Bot,
+        callback: CallbackQuery = None,
         command: CommandObject = None,
         after_results: bool = False
 ) -> None:
@@ -59,25 +60,19 @@ async def handle_command_start(
         challenged_topic_id, referrer_id = await decode_referral(command.args)
         if challenged_topic_id > 0 and challenged_topic_id < 2000:
             await state.update_data(challenged_topic_id=challenged_topic_id, referrer_id=referrer_id)
-    user_data = await state.get_data()
-    username = message.from_user.username
-    if (username == 'NiceTryGameBot' or username == 'NiceTryDevBot') and 'player' not in user_data:
-        await message.answer(Messages.start_again)
-        await state.set_state(None)
-        return
-    if 'player' not in user_data:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f'{API}/player',
-                json={
-                    'telegram_id': message.from_user.id,
-                    'telegram_username': username,
-                    'name': f'{message.from_user.first_name} {message.from_user.last_name}'.strip()
-                }
-            ) as response:
-                player = await response.json()
-                await state.update_data(player=player)
-                logger.info(f'GAME Joined {format_player(player)}')
+    from_user = callback.from_user if callback else message.from_user
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            f'{API}/player',
+            json={
+                'telegram_id': from_user.id,
+                'telegram_username': from_user.username,
+                'name': f'{from_user.first_name} {from_user.last_name}'.strip()
+            }
+        ) as response:
+            player = await response.json()
+            await state.update_data(player=player)
+            logger.info(f'GAME Joined {format_player(player)}')
     new_message = await message.answer_photo(
         Images.main,
         Messages.welcome,
@@ -123,11 +118,11 @@ async def handle_interruption_confirmation(callback: CallbackQuery, state: FSMCo
             ):
                 logger.info(f'GAME Aborted round {user_data["round_id"]} by {format_player(user_data["player"])}')
         await state.set_data({'player': user_data['player'], 'round_is_finished': True})
-        await handle_command_start(message=callback.message, state=state)
+        await handle_command_start(message=callback.message, state=state, bot=bot, callback=callback)
         return
     # await state.set_data({'player': user_data['player']})
     await state.set_data({})
-    await handle_command_start(message=callback.message, state=state, bot=bot)
+    await handle_command_start(message=callback.message, state=state, bot=bot, callback=callback)
 
 
 @game_router.callback_query(Text('go_on'), GameStates.interruption)
@@ -147,7 +142,13 @@ async def handle_query_main(callback: CallbackQuery, state: FSMContext, bot: Bot
         await state.update_data(round_is_finished=False)
         after_results = True
     await callback.answer()
-    await handle_command_start(message=callback.message, state=state, bot=bot, after_results=after_results)
+    await handle_command_start(
+        message=callback.message,
+        state=state,
+        bot=bot,
+        callback=callback,
+        after_results=after_results
+    )
 
 
 @game_router.callback_query(Text('rules'), GameStates.main)
@@ -178,7 +179,7 @@ async def handle_query_rating(callback: CallbackQuery, state: FSMContext) -> Non
     formatted_rating = await format_rating(top_players, user_data['player'])
     new_message = await callback.message.answer_photo(
         Images.rating,
-        formatted_rating,
+        f'{Messages.rating_formula}\n\n{formatted_rating}',
         reply_markup=await get_keyboard([['game', 'rules', 'main']])
     )
     await state.update_data(new_message_id=new_message.message_id)

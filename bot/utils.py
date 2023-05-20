@@ -66,11 +66,11 @@ async def format_rating(top_players: list[dict], current_player: dict) -> str:
     table.set_header_align(['l', 'l'])
     table.add_rows([['Игрок', 'Очки']])
     for position, player in enumerate(top_players, start=1):
-        table.add_row([f'{position}. {player["displayed_name"]}', player['average_score']])
+        table.add_row([f'{position}. {player["displayed_name"]}', player['rating']])
     if current_player not in top_players:
         table.add_row(['', ''])
         table.add_row(
-            [f'{current_player["position"]}. {current_player["displayed_name"]}', current_player['average_score']]
+            [f'{current_player["position"]}. {current_player["displayed_name"]}', current_player['rating']]
         )
     return html.pre(html.quote(table.draw()))
 
@@ -79,7 +79,7 @@ async def format_hits(hits: list[dict], last_hit_positions: list[int] = []) -> s
     hits = sorted(hits, key=lambda hit: hit['position'])
     table = Texttable()
     table.set_max_width(25)
-    table.set_deco(Texttable.HEADER)
+    table.set_deco(Texttable.HEADER | Texttable.HLINES)
     table.set_chars(['-', '|', '+', '-'])
     table.set_cols_width([1, 18, 4])
     table.set_cols_align(['l', 'l', 'l'])
@@ -87,7 +87,8 @@ async def format_hits(hits: list[dict], last_hit_positions: list[int] = []) -> s
     table.add_rows([['', 'Место и ответ', 'Очки']])
     for hit in hits:
         if hit['position'] in last_hit_positions:
-            hit['answer'] = f'>>> {hit["answer"]}'
-        hit['player'] = '👤' if hit['player'] == 1 else '🤖'
+            hit['answer'] = f'{Messages.Emojis.new} {hit["answer"]}'
+        hit['player'] = Messages.Emojis.human if hit['player'] == 1 else Messages.Emojis.bot
+        hit['points'] = getattr(Messages.Emojis, f'num{hit["points"]}')
         table.add_row([hit['player'], f'{hit["position"]}. {hit["answer"]}', hit['points']])
     return html.pre(html.quote(table.draw()))

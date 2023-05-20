@@ -8,7 +8,7 @@ from handlers import game_router, redis
 
 
 async def main() -> None:
-    bot = Bot(TG_TOKEN, parse_mode='HTML')    
+    bot = Bot(TG_TOKEN, parse_mode='HTML')
     storage = RedisStorage(redis=redis)
     dp = Dispatcher(storage=storage)
     dp.include_router(game_router)
