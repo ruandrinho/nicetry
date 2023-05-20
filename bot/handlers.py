@@ -361,7 +361,10 @@ async def handle_query_answer(callback: CallbackQuery, state: FSMContext, bot: B
             result = await response.json()
             entity = result['entities'][0]
     await handle_hit(callback.message, state, entity, bot=bot)
-    await callback.message.answer(Messages.bot_answer.replace('ANSWER', result['bot_answer']))
+    bot_answer = Messages.bot_answer.replace('ANSWER', result['bot_answer'])
+    if result['bot_answer_entity']['position'] > 10:
+        bot_answer += ' (он не попал в десятку)'
+    await callback.message.answer(bot_answer)
     await handle_hit(callback.message, state, result['bot_answer_entity'], from_bot=True, bot=bot)
     attempts_left_message = getattr(Messages, f'left{result["attempts_left"]}')
     new_message = await callback.message.answer(attempts_left_message)
