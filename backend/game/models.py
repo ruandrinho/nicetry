@@ -2,6 +2,7 @@ import itertools
 import json
 import re
 from collections import defaultdict
+from random import choice
 from typing import Optional
 
 from django.contrib import admin
@@ -425,7 +426,8 @@ class Round(models.Model):
             self.save()
 
     def get_bot_answer(self) -> tuple[str, TopicEntity]:
-        topic_entity_id, bot_answer = list(json.loads(self.bot_answers).items())[0]
+        bot_answers_slice = list(json.loads(self.bot_answers).items())[0:3]
+        topic_entity_id, bot_answer = choice(bot_answers_slice)
         topic_entity = TopicEntity.objects.get(id=topic_entity_id)
         Answer.get_or_create(round=self, topic_entity=topic_entity, text=bot_answer, player=2)
         return bot_answer, topic_entity
