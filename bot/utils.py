@@ -66,7 +66,7 @@ async def format_rating(top_players: list[dict], current_player: dict) -> str:
     table.set_header_align(['l', 'l'])
     table.add_rows([['Игрок', 'Очки']])
     for position, player in enumerate(top_players, start=1):
-        table.add_row([f'{position}/{player["average_score"]}', player['displayed_name']])
+        table.add_row([f'{position}. {player["displayed_name"]}', player['average_score']])
     if current_player not in top_players:
         table.add_row(['', ''])
         table.add_row(
