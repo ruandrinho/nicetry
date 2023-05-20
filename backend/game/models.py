@@ -289,7 +289,7 @@ class TopicEntity(models.Model):
 
 class PlayerQuerySet(models.QuerySet):
     def top(self, count: int = 10):
-        return self.order_by('-average_score')[:count]
+        return self.order_by('-rating')[:count]
 
 
 class Player(models.Model):
