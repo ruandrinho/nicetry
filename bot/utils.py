@@ -61,16 +61,16 @@ async def format_rating(top_players: list[dict], current_player: dict) -> str:
     table.set_max_width(25)
     table.set_deco(Texttable.HEADER)
     table.set_chars(['-', '|', '+', '-'])
-    table.set_cols_width([5, 19])
+    table.set_cols_width([20, 4])
     table.set_cols_align(['l', 'l'])
     table.set_header_align(['l', 'l'])
-    table.add_rows([['Место/очки', 'Игрок']])
+    table.add_rows([['Игрок', 'Очки']])
     for position, player in enumerate(top_players, start=1):
         table.add_row([f'{position}/{player["average_score"]}', player['displayed_name']])
     if current_player not in top_players:
         table.add_row(['', ''])
         table.add_row(
-            [f'{current_player["position"]}/{current_player["average_score"]}', current_player['displayed_name']]
+            [f'{current_player["position"]}. {current_player["displayed_name"]}', current_player['average_score']]
         )
     return html.pre(html.quote(table.draw()))
 
@@ -81,17 +81,13 @@ async def format_hits(hits: list[dict], last_hit_positions: list[int] = []) -> s
     table.set_max_width(25)
     table.set_deco(Texttable.HEADER)
     table.set_chars(['-', '|', '+', '-'])
-    table.set_cols_width([5, 19])
-    table.set_cols_align(['l', 'l'])
-    table.set_header_align(['l', 'l'])
-    table.add_rows([['Место/очки', 'Ответ']])
+    table.set_cols_width([1, 18, 4])
+    table.set_cols_align(['l', 'l', 'l'])
+    table.set_header_align(['l', 'l', 'l'])
+    table.add_rows([['', 'Место и ответ', 'Очки']])
     for hit in hits:
-        hit_position = hit['position']
-        if hit_position in last_hit_positions:
-            if hit_position == 1 or hit_position == 10:
-                hit_position = f'·{hit_position}'
-            else:
-                hit_position = f'··{hit_position}'
-        hit_answer = f'» {hit["answer"]}' if hit['player'] == 1 else hit['answer']
-        table.add_row([f'{hit_position}/{hit["points"]}', hit_answer])
+        if hit['position'] in last_hit_positions:
+            hit['answer'] = f'>>> {hit["answer"]}'
+        hit['player'] = '👤' if hit['player'] == 1 else '🤖'
+        table.add_row([hit['player'], f'{hit["position"]}. {hit["answer"]}', hit['points']])
     return html.pre(html.quote(table.draw()))
