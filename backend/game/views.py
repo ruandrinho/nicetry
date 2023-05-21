@@ -9,4 +9,4 @@ class AnswerListView(ListView):
     template_name = 'answer_list.html'
 
     def get_queryset(self):
-        return Answer.objects.unbound().with_topic_entities().order_by('-sent_at')
+        return Answer.objects.order_by('-sent_at').unbound().with_topic_entities()
