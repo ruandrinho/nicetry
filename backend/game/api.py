@@ -212,7 +212,9 @@ class AnswerModerationSchema(Schema):
 def put_answer(request, data: AnswerModerationSchema):
     answer = get_object_or_404(Answer, id=data.answer_id)
     if data.topic_entity_id:
-        answer.assign_topic_entity(id=data.topic_entity_id)
+        topic_entity = get_object_or_404(TopicEntity, id=data.topic_entity_id)
+        answer.assign_topic_entity(topic_entity=topic_entity)
+        topic_entity.entity.update_title_and_pattern(data.entity_title, data.entity_pattern)
         return {'detail': 'ok'}
     if data.entity_id:
         entity = get_object_or_404(Entity, id=data.entity_id)

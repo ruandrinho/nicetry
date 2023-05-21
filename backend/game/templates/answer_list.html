@@ -54,7 +54,7 @@
       <select class="topic-entity-select">
         <option>Topic Entity</option>
         {% for te in answer.topic_entities %}
-        <option value="{{ te.id }}">{{ te.title }}</option>
+        <option value="{{ te.id }}" pattern="{{ te.pattern }}">{{ te.title }}</option>
         {% endfor %}
       </select>
       <input class="entity-input" type="text" placeholder="Entity">
@@ -104,6 +104,8 @@ $(document).ready(function() {
   });
   $('select').on('change', function() {
     $(this).addClass('chosen');
+    $(this).parent().find('.entity-title-input').val($(this).find('option:selected').text());
+    $(this).parent().find('.entity-pattern-input').val($(this).find('option:selected').attr('pattern'));
   });
   $('.entity-title-input').on('change', function() {
     $(this).parent().find('.entity-pattern-input').val(simplifyText($(this).val()));
@@ -112,16 +114,18 @@ $(document).ready(function() {
     event.preventDefault();
     const answerID = $(this).parent().attr('id').split('-')[1];
     const selectedTopicEntityID = $(this).find('.topic-entity-select').val();
+    const entityTitle = $(this).find('.entity-title-input').val();
+    const entityPattern = $(this).find('.entity-pattern-input').val();
     if (selectedTopicEntityID && selectedTopicEntityID != 'Topic Entity') {
       putAnswer($(this), {
         answer_id: answerID,
-        topic_entity_id: selectedTopicEntityID
+        topic_entity_id: selectedTopicEntityID,
+        entity_title: entityTitle,
+        entity_pattern: entityPattern
       });
       return;
     }
     const selectedEntityID = $(this).find('.entity-input').attr('selected-id');
-    const entityTitle = $(this).find('.entity-title-input').val();
-    const entityPattern = $(this).find('.entity-pattern-input').val();
     if (selectedEntityID) {
       putAnswer($(this), {
         answer_id: answerID,

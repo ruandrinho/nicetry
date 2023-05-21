@@ -391,7 +391,7 @@ class Player(models.Model):
 
     @property
     def position(self) -> int:
-        return Player.objects.filter(average_score__gt=self.average_score).count() + 1
+        return Player.objects.filter(rating__gt=self.rating).count() + 1
 
 
 class RoundQuerySet(models.QuerySet):
@@ -499,11 +499,17 @@ class AnswerQuerySet(models.QuerySet):
         return self.filter(topic_entity__isnull=True)
 
     def with_topic_entities(self):
+        topic_entities_cache = {}
         for answer in self:
-            answer.topic_entities = [
-                {'id': te.id, 'title': te.entity.title}
-                for te in answer.round.topic.topic_entities.all().order_by('entity__title')
-            ]
+            if answer.round.topic in topic_entities_cache:
+                topic_entities = topic_entities_cache[answer.round.topic]
+            else:
+                topic_entities = [
+                    {'id': te.id, 'title': te.entity.title, 'pattern': te.entity.pattern}
+                    for te in answer.round.topic.topic_entities.all().order_by('entity__title')
+                ]
+                topic_entities_cache[answer.round.topic] = topic_entities
+            answer.topic_entities = topic_entities
         return self
 
 
