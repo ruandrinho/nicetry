@@ -9,6 +9,7 @@ from django.contrib import admin
 from django.db import models
 from django.db.models import Avg, F
 from django.http import Http404
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 import jellyfish
 
@@ -145,7 +146,10 @@ class Entity(models.Model):
     def __str__(self) -> str:
         return self.title
 
-    def compile_pattern(self) -> None:
+    def compile_pattern(self, pattern: str | None = None) -> None:
+        if pattern:
+            self.pattern = pattern
+
         matches: list[str] = []
 
         # Replace spaces into '|' inside bracket groups
@@ -249,6 +253,13 @@ class Entity(models.Model):
         matches = [remove_successive_letters(item) for item in list(set(matches)) if item]
         self.matches = ' '.join(sorted(matches))
         self.save()
+
+    def update_title_and_pattern(self, title: str, pattern: str) -> None:
+        if self.title != title:
+            self.title = title
+            self.save()
+        if self.pattern != pattern:
+            self.compile_pattern(pattern)
 
 
 class TopicEntity(models.Model):
@@ -476,6 +487,19 @@ class Round(models.Model):
         return answers
 
 
+class AnswerQuerySet(models.QuerySet):
+    def unbound(self):
+        return self.filter(topic_entity__isnull=True)
+
+    def with_topic_entities(self):
+        for answer in self:
+            answer.topic_entities = [
+                {'id': te.id, 'title': te.entity.title}
+                for te in answer.round.topic.topic_entities.all().order_by('entity__title')
+            ]
+        return self
+
+
 class Answer(models.Model):
     round = models.ForeignKey(Round, verbose_name='Раунд', on_delete=models.PROTECT, related_name='answers')
     topic_entity = models.ForeignKey(
@@ -489,6 +513,8 @@ class Answer(models.Model):
     text = models.TextField('Ответ')
     position = models.PositiveSmallIntegerField('Место', null=True, blank=True)
     sent_at = models.DateTimeField('Отправлен', auto_now_add=True)
+
+    objects = AnswerQuerySet.as_manager()
 
     def __str__(self) -> str:
         return f'{self.round} — {self.text}'
@@ -516,3 +542,12 @@ class Answer(models.Model):
                 text=text
             )
         return created
+
+    def assign_topic_entity(self, id: int | None = None, topic_entity: TopicEntity | None = None) -> None:
+        if id:
+            topic_entity = get_object_or_404(TopicEntity, id=id)
+        if topic_entity:
+            self.topic_entity = topic_entity
+            self.save()
+            topic_entity.increment_answers_count()
+            TopicEntity.bulk_update_positions(self.round.topic)

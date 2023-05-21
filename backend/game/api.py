@@ -2,7 +2,7 @@ from typing import Optional
 
 from django.shortcuts import get_object_or_404
 from ninja import Router, Field, Schema
-from .models import Topic, TopicEntity, Player, Round, Answer, Config
+from .models import Topic, Entity, TopicEntity, Player, Round, Answer, Config
 
 router = Router()
 
@@ -61,6 +61,7 @@ def put_player(request, data: ReferrerSchema):
     player = Player.find(id=data.player_id)
     if not player.referrer:
         player.referrer = Player.find(id=data.referrer_id)
+        player.save()
     return {'detail': 'ok'}
 
 
@@ -199,6 +200,40 @@ def answer(request, data: AnswerSchema):
     }
 
 
+class AnswerModerationSchema(Schema):
+    answer_id: int
+    topic_entity_id: int | None = None
+    entity_id: int | None = None
+    entity_title: str | None = None
+    entity_pattern: str | None = None
+
+
+@router.put('/answer', response={200: Message200, 404: Message404})
+def put_answer(request, data: AnswerModerationSchema):
+    answer = get_object_or_404(Answer, id=data.answer_id)
+    if data.topic_entity_id:
+        answer.assign_topic_entity(id=data.topic_entity_id)
+        return {'detail': 'ok'}
+    if data.entity_id:
+        entity = get_object_or_404(Entity, id=data.entity_id)
+        entity.update_title_and_pattern(data.entity_title, data.entity_pattern)
+        topic_entity = TopicEntity.objects.create(topic=answer.round.topic, entity=entity)
+        answer.assign_topic_entity(topic_entity=topic_entity)
+        return {'detail': 'ok'}
+    if data.entity_title and data.entity_pattern:
+        entity, created = Entity.objects.get_or_create(
+            title=data.entity_title,
+            defaults={'pattern': data.entity_pattern}
+        )
+        if created:
+            entity.compile_pattern()
+        elif entity.pattern != data.entity_pattern:
+            entity.compile_pattern(data.entity_pattern)
+        topic_entity = TopicEntity.objects.create(topic=answer.round.topic, entity=entity)
+        answer.assign_topic_entity(topic_entity=topic_entity)
+    return {'detail': 'ok'}
+
+
 class FinishSchema(Schema):
     round_id: int
     score1: int = 0
@@ -211,3 +246,14 @@ def finish_round(request, data: FinishSchema):
     round = get_object_or_404(Round, id=data.round_id)
     round.finish(score1=data.score1, score2=data.score2, abort=data.abort)
     return {'detail': 'ok'}
+
+
+class EntitySchema(Schema):
+    id: int
+    title: str
+    pattern: str
+
+
+@router.get('/entities', response={200: list[EntitySchema]})
+def search_entities(request, term: str):
+    return Entity.objects.filter(title__icontains=term)
