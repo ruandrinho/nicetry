@@ -178,9 +178,7 @@ async def handle_query_rating(callback: CallbackQuery, state: FSMContext) -> Non
                 return
             top_players = await response.json()
     formatted_rating = await format_rating(top_players, user_data['player'])
-    logger.debug(formatted_rating)
-    new_message = await callback.message.answer_photo(
-        Images.rating,
+    new_message = await callback.message.answer(
         f'{Messages.rating_formula}\n\n{formatted_rating}',
         reply_markup=await get_keyboard([['game', 'rules', 'main']])
     )
