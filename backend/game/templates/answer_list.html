@@ -36,6 +36,11 @@
     button {padding: 0.5rem;}
     ::placeholder {color: silver;}
     .ui-autocomplete {max-height: 20rem; overflow-y: auto; overflow-x: hidden;}
+    .pagination {text-align: center; padding-top: 1rem;}
+    .pagination a {text-decoration: none;}
+    a.previous {border-right: 1px solid silver; padding-right: 1rem;}
+    a.next {border-left: 1px solid silver; padding-left: 1rem;}
+    span.current {padding: 0 1rem;}
   </style>
 </head>
 
@@ -59,6 +64,17 @@
     </form>
   </div>
   {% endfor %}
+  <div class="pagination">
+    {% if page_obj.has_previous %}
+      <a href="?page={{ page_obj.previous_page_number }}" class="previous">← Previous page</a>
+    {% endif %}
+    <span class="current">
+      Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+    </span>
+    {% if page_obj.has_next %}
+      <a href="?page={{ page_obj.next_page_number }}" class="next">Next page →</a>
+    {% endif %}
+</div>
 
 <script>
 $(document).ready(function() {
