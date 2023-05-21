@@ -61,13 +61,14 @@ async def handle_command_start(
         if challenged_topic_id > 0 and challenged_topic_id < 2000:
             await state.update_data(challenged_topic_id=challenged_topic_id, referrer_id=referrer_id)
     from_user = callback.from_user if callback else message.from_user
+    name = ' '.join([from_user.first_name or '', from_user.last_name or '']).strip()
     async with aiohttp.ClientSession() as session:
         async with session.post(
             f'{API}/player',
             json={
                 'telegram_id': from_user.id,
                 'telegram_username': from_user.username,
-                'name': f'{from_user.first_name} {from_user.last_name}'.strip()
+                'name': name
             }
         ) as response:
             player = await response.json()

@@ -59,19 +59,17 @@ async def get_keyboard(layout: list[list[str | tuple[str]]], **kwargs) -> Inline
 async def format_rating(top_players: list[dict], current_player: dict) -> str:
     table = Texttable()
     table.set_max_width(25)
-    table.set_deco(Texttable.HEADER)
+    table.set_deco(Texttable.HEADER | Texttable.HLINES)
     table.set_chars(['-', '|', '+', '-'])
-    table.set_cols_width([20, 4])
-    table.set_cols_align(['l', 'l'])
-    table.set_header_align(['l', 'l'])
-    table.add_rows([['Игрок', 'Очки']])
+    table.set_cols_width([3, 16, 4])
+    table.set_cols_align(['r', 'l', 'l'])
+    table.set_header_align(['r', 'l', 'l'])
+    table.add_rows([['', 'Игрок', 'Очки']])
     for position, player in enumerate(top_players, start=1):
-        table.add_row([f'{position}. {player["displayed_name"]}', player['rating']])
+        table.add_row([f'{position}.', player['displayed_name'], player['rating']])
     if current_player not in top_players:
-        table.add_row(['', ''])
-        table.add_row(
-            [f'{current_player["position"]}. {current_player["displayed_name"]}', current_player['rating']]
-        )
+        table.add_row(['...', '...', '...'])
+        table.add_row([current_player['position'], current_player['displayed_name'], current_player['rating']])
     return html.pre(html.quote(table.draw()))
 
 

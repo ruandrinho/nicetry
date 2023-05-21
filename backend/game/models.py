@@ -348,6 +348,12 @@ class Player(models.Model):
                     'name': kwargs['name']
                 }
             )
+            if player.telegram_username != kwargs['telegram_username']:
+                player.telegram_username = kwargs['telegram_username']
+                player.save()
+            if player.name != kwargs['name']:
+                player.name = kwargs['name']
+                player.save()
         return player
 
     def assign_topics(self, topics: list[Topic]) -> None:
@@ -378,9 +384,10 @@ class Player(models.Model):
 
     @property
     def displayed_name(self) -> str:
-        if self.name:
-            return self.name
-        return self.telegram_username
+        displayed_name = self.name
+        if self.telegram_username:
+            displayed_name += f' @{self.telegram_username}'
+        return displayed_name
 
     @property
     def position(self) -> int:
