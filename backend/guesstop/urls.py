@@ -24,4 +24,5 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', api.urls),
     path('answers/', views.AnswerListView.as_view(), name='answer_list'),
+    path('answers/24h', views.AnswerList24hView.as_view(), name='answer_list_24h'),
 ]
