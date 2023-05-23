@@ -215,14 +215,12 @@ def put_answer(request, data: AnswerModerationSchema):
         topic_entity = get_object_or_404(TopicEntity, id=data.topic_entity_id)
         answer.assign_topic_entity(topic_entity=topic_entity)
         topic_entity.entity.update_title_and_pattern(data.entity_title, data.entity_pattern)
-        return {'detail': 'ok'}
-    if data.entity_id:
+    elif data.entity_id:
         entity = get_object_or_404(Entity, id=data.entity_id)
         entity.update_title_and_pattern(data.entity_title, data.entity_pattern)
         topic_entity = TopicEntity.objects.create(topic=answer.round.topic, entity=entity)
         answer.assign_topic_entity(topic_entity=topic_entity)
-        return {'detail': 'ok'}
-    if data.entity_title and data.entity_pattern:
+    elif data.entity_title and data.entity_pattern:
         entity, created = Entity.objects.get_or_create(
             title=data.entity_title,
             defaults={'pattern': data.entity_pattern}
@@ -233,6 +231,7 @@ def put_answer(request, data: AnswerModerationSchema):
             entity.compile_pattern(data.entity_pattern)
         topic_entity = TopicEntity.objects.create(topic=answer.round.topic, entity=entity)
         answer.assign_topic_entity(topic_entity=topic_entity)
+    answer.round.topic.gather_matches()
     return {'detail': 'ok'}
 
 
