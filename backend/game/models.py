@@ -104,14 +104,15 @@ class Topic(models.Model):
         self.save()
 
     def gather_matches(self) -> None:
-        matches = defaultdict(list)
+        matches = defaultdict(set)
         odd_words = self.exclusions.split()
         for entity in self.entities.all():
             for match in entity.matches.split():
-                matches[match].append(entity.id)
+                matches[match].add(entity.id)
                 for word in odd_words:
                     match = match.replace(word, '')
-                matches[match].append(entity.id)
+                matches[match].add(entity.id)
+        matches = {match: list(ids) for match, ids in matches.items()}
         self.matches = json.dumps(matches, ensure_ascii=False)
         self.save()
 
