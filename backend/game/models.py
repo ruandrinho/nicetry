@@ -272,6 +272,7 @@ class TopicEntity(models.Model):
 
     class Meta:
         ordering = ['position']
+        unique_together = ['topic', 'entity']
         verbose_name_plural = 'topic entities'
 
     def __str__(self) -> str:
