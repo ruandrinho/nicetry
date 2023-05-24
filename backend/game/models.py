@@ -108,6 +108,7 @@ class Topic(models.Model):
         odd_words = self.exclusions.split()
         for entity in self.entities.all():
             for match in entity.matches.split():
+                matches[match].append(entity.id)
                 for word in odd_words:
                     match = match.replace(word, '')
                 matches[match].append(entity.id)
