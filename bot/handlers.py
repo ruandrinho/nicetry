@@ -392,9 +392,9 @@ async def handle_bot_answer(message: Message, state: FSMContext, bot: Bot, resul
     if result['bot_answer_entity']['position'] > 10:
         bot_answer += Messages.bot_miss
     await bot.send_chat_action(message.chat.id, 'typing')
-    await asyncio.sleep(randint(1, 3))
+    await asyncio.sleep(1)
     await message.answer(bot_answer)
-    await asyncio.sleep(2)
+    await asyncio.sleep(1)
     await handle_hit(message, state, result['bot_answer_entity'], from_bot=True, bot=bot)
     attempts_left_message = getattr(Messages, f'left{result["attempts_left"]}')
     new_message = await message.answer(attempts_left_message)
@@ -462,7 +462,7 @@ async def handle_results(message: Message, state: FSMContext, bot: Bot) -> None:
     formatted_results = await format_hits(user_data['hits'])
     await bot.unpin_chat_message(chat_id=message.chat.id, message_id=user_data['pinned_message_id'])
     await bot.send_chat_action(message.chat.id, 'typing')
-    await asyncio.sleep(3)
+    await asyncio.sleep(2)
     await message.answer_photo(
         Images.results,
         f'{outcome_message}\n\n{formatted_results}',
