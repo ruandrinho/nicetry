@@ -65,8 +65,8 @@ async def handle_command_spam(message: Message, state: FSMContext, bot: Bot, com
             players = await response.json()
     for player in players:
         with suppress(TelegramBadRequest):
-            logger.debug(player['id'])
-            # bot.send_message(player['id'], message, disable_notification=True)
+            logger.info(f'SPAM Message sent to {player["displayed_name"]}')
+            bot.send_message(player['id'], message, disable_notification=True)
 
 
 @game_router.message(Command('start'), StateFilter(default_state))
