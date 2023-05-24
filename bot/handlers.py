@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from contextlib import suppress
-from random import choice, randint
+from random import choice
 
 import aiohttp
 from aiogram import Router, F, html
