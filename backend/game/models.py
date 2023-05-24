@@ -301,7 +301,7 @@ class TopicEntity(models.Model):
 class PlayerQuerySet(models.QuerySet):
     def inactive(self):
         one_week_ago = timezone.now() - timezone.timedelta(weeks=1)
-        return self.filter(rounds__started_at__lte=one_week_ago)
+        return self.exclude(rounds__started_at__gte=one_week_ago)
 
     def top(self, count: int = 10):
         return self.order_by('-rating')[:count]
