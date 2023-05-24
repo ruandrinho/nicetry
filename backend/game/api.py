@@ -27,9 +27,18 @@ class PlayerInSchema(Schema):
 
 class PlayerOutSchema(Schema):
     id: int
+    telegram_id: int
     displayed_name: str
     rating: int
     position: int = None
+
+
+@router.get('/players', response={200: list[PlayerOutSchema]})
+def get_players(request, group: Optional[str] = None):
+    if not group or group == 'ALL':
+        return Player.objects.all()
+    if group == 'INACTIVE':
+        return Player.objects.inactive()
 
 
 @router.post('/player', response={200: PlayerOutSchema})
