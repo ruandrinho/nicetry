@@ -12,7 +12,7 @@ from aiogram.fsm.state import State, StatesGroup, default_state
 from aiogram.fsm.storage.redis import Redis
 from aiogram.types import CallbackQuery, Message
 
-from config import Messages, Images, API, OPEN
+from config import Messages, Images, ADMIN_ID, API, OPEN
 from utils import (
     decode_referral,
     encode_referral,
@@ -43,6 +43,30 @@ class GameStates(StatesGroup):
     answer = State()
     feedback = State()
     interruption = State()
+
+
+@game_router.message(Command('spam'), F.from_user.id == ADMIN_ID)
+async def handle_command_spam(message: Message, state: FSMContext, bot: Bot, command: CommandObject = None):
+    group, message = command.args.split(' ', 1)
+    if group not in ['ALL', 'INACTIVE']:
+        return
+    async with aiohttp.ClientSession() as session:
+        async with session.get(
+            f'{API}/players',
+            params={
+                'group': group,
+            }
+        ) as response:
+            if response.status != 200:
+                decoded_response = await response.json()
+                await handle_error_response(message, state, decoded_response['detail'])
+                logger.warning(f'GAME Getting players: {decoded_response["detail"]}')
+                return
+            players = await response.json()
+    for player in players:
+        with suppress(TelegramBadRequest):
+            logger.debug(player['id'])
+            # bot.send_message(player['id'], message, disable_notification=True)
 
 
 @game_router.message(Command('start'), StateFilter(default_state))

@@ -5,6 +5,7 @@ from environs import Env
 env = Env()
 env.read_env()
 
+ADMIN_ID = env.int('ADMIN_ID')
 API = env('API')
 TG_TOKEN = env('TG_TOKEN')
 LOGO_URL = 'https://lh3.googleusercontent.com/drive-viewer/AFGJ81rjGM-HN9T1IGotrw0PpjcQ-9qJGuK5tpjmCNSP5VMUovhR_zrqyuuZkekF1_xgQGkJ_d7YNLqQNJAweCzAsEniQdbd=s1600'  # noqa
