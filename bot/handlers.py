@@ -1,6 +1,7 @@
+import asyncio
 import logging
 from contextlib import suppress
-from random import choice
+from random import choice, randint
 
 import aiohttp
 from aiogram import Router, F, html
@@ -350,16 +351,7 @@ async def handle_message_answer(message: Message, state: FSMContext, bot: Bot) -
             await message.answer(Messages.miss)
     elif not result['skipped']:
         await message.answer(Messages.miss)
-    bot_answer = Messages.bot_answer.replace('ANSWER', result['bot_answer'])
-    if result['bot_answer_entity']['position'] > 10:
-        bot_answer += Messages.bot_miss
-    await message.answer(bot_answer)
-    await handle_hit(message, state, result['bot_answer_entity'], from_bot=True, bot=bot)
-    attempts_left_message = getattr(Messages, f'left{result["attempts_left"]}')
-    new_message = await message.answer(attempts_left_message)
-    await state.update_data(new_message_id=new_message.message_id)
-    if not result['attempts_left']:
-        await handle_results(message, state, bot)
+    await handle_bot_answer(message, state, bot, result)
 
 
 @game_router.callback_query(Text(startswith='id'), GameStates.answer)
@@ -389,18 +381,25 @@ async def handle_query_answer(callback: CallbackQuery, state: FSMContext, bot: B
             result = await response.json()
             entity = result['entities'][0]
     await handle_hit(callback.message, state, entity, bot=bot)
+    await handle_bot_answer(callback.message, state, bot, result)
+    await callback.message.delete()
+    await callback.answer()
+
+
+async def handle_bot_answer(message: Message, state: FSMContext, bot: Bot, result: dict) -> None:
     bot_answer = Messages.bot_answer.replace('ANSWER', result['bot_answer'])
     if result['bot_answer_entity']['position'] > 10:
         bot_answer += Messages.bot_miss
-    await callback.message.answer(bot_answer)
-    await handle_hit(callback.message, state, result['bot_answer_entity'], from_bot=True, bot=bot)
+    await bot.send_chat_action(message.chat.id, 'typing')
+    await asyncio.sleep(randint(1, 3))
+    await message.answer(bot_answer)
+    await asyncio.sleep(2)
+    await handle_hit(message, state, result['bot_answer_entity'], from_bot=True, bot=bot)
     attempts_left_message = getattr(Messages, f'left{result["attempts_left"]}')
-    new_message = await callback.message.answer(attempts_left_message)
+    new_message = await message.answer(attempts_left_message)
     await state.update_data(new_message_id=new_message.message_id)
     if not result['attempts_left']:
-        await handle_results(callback.message, state, bot)
-    await callback.message.delete()
-    await callback.answer()
+        await handle_results(message, state, bot)
 
 
 async def handle_hit(
@@ -461,6 +460,8 @@ async def handle_results(message: Message, state: FSMContext, bot: Bot) -> None:
     deeplink = f'https://t.me/NiceTryGameBot?start={referral}'
     formatted_results = await format_hits(user_data['hits'])
     await bot.unpin_chat_message(chat_id=message.chat.id, message_id=user_data['pinned_message_id'])
+    await bot.send_chat_action(message.chat.id, 'typing')
+    await asyncio.sleep(3)
     await message.answer_photo(
         Images.results,
         f'{outcome_message}\n\n{formatted_results}',
