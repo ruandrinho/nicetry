@@ -260,8 +260,9 @@ async def handle_query_game(callback: CallbackQuery, state: FSMContext, bot: Bot
     await state.update_data(topics={topic['id']: topic['title'] for topic in topics})
     buttons = [[(topic['title'], f'id{topic["id"]}')] for topic in topics]
     buttons.append(['main'])
+    joined_topics = ', '.join(topic['title'] for topic in topics)
     new_message = await callback.message.answer(
-        Messages.choose_topic,
+        Messages.choose_topic + joined_topics,
         reply_markup=await get_keyboard(buttons)
     )
     await state.update_data(new_message_id=new_message.message_id)
