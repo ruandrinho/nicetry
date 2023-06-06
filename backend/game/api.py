@@ -103,18 +103,19 @@ def get_random_topics(request, player_id: int):
 class RoundInSchema(Schema):
     player_id: int
     topic_id: int
+    hits_mode: bool = False
 
 
 class RoundOutSchema(Schema):
     id: int
-    attempts_left: int = Config.attempts_count
+    attempt: int = 0
 
 
 @router.post('/round', response={200: RoundOutSchema, 403: Message403, 404: Message404})
 def start_round(request, data: RoundInSchema):
     player = Player.find(player_id=data.player_id)
     player.clear_assigned_topics()
-    round, created = Round.objects.get_or_create(player1=player, topic_id=data.topic_id)
+    round, created = Round.objects.get_or_create(player1=player, topic_id=data.topic_id, hits_mode=data.hits_mode)
     if created:
         round.update_bot_answers()
         return {'id': round.id}
@@ -149,7 +150,7 @@ class TopicEntitySchema(Schema):
 
 
 class AttemptSchema(Schema):
-    attempts_left: int = 0
+    attempt: int = 0
     entities: list[TopicEntitySchema] = None
     bot_answer: str = None
     bot_answer_entity: TopicEntitySchema = None
@@ -159,9 +160,10 @@ class AttemptSchema(Schema):
 @router.post('/answer', response={200: AttemptSchema, 403: Message403, 404: Message404})
 def answer(request, data: AnswerSchema):
     round = get_object_or_404(Round, id=data.round_id)
-    attempts_left = round.attempts_left
-    if not attempts_left:
-        return 403, {'detail': 'Все попытки использованы'}
+    # Может ли возникнуть такая ситуация?
+    # attempts_left = round.attempts_left
+    # if not attempts_left:
+    #     return 403, {'detail': 'Все попытки использованы'}
 
     skipped = data.answer == '-'
 
@@ -172,7 +174,7 @@ def answer(request, data: AnswerSchema):
             return 403, {'detail': 'Этот ответ засчитан, введите другой'}
         bot_answer, bot_answer_entity = round.get_bot_answer()
         return {
-            'attempts_left': attempts_left - 1,
+            'attempt': round.attempt,
             'entities': [topic_entity],
             'bot_answer': bot_answer,
             'bot_answer_entity': bot_answer_entity
@@ -186,7 +188,7 @@ def answer(request, data: AnswerSchema):
                 return 403, {'detail': 'Этот ответ засчитан, введите другой'}
         bot_answer, bot_answer_entity = round.get_bot_answer()
         return {
-            'attempts_left': attempts_left - 1,
+            'attempt': round.attempt,
             'bot_answer': bot_answer,
             'bot_answer_entity': bot_answer_entity,
             'skipped': skipped
@@ -197,14 +199,14 @@ def answer(request, data: AnswerSchema):
             return 403, {'detail': 'Этот ответ засчитан, введите другой'}
         bot_answer, bot_answer_entity = round.get_bot_answer()
         return {
-            'attempts_left': attempts_left - 1,
+            'attempt': round.attempt,
             'entities': topic_entities,
             'bot_answer': bot_answer,
             'bot_answer_entity': bot_answer_entity
         }
 
     return {
-        'attempts_left': attempts_left,
+        'attempt': round.attempt,
         'entities': topic_entities
     }
 
@@ -248,13 +250,15 @@ class FinishSchema(Schema):
     round_id: int
     score1: int = 0
     score2: int = 0
+    hits1: int = 0
+    hits2: int = 0
     abort: bool = False
 
 
 @router.post('/finish', response={200: Message200, 404: Message404})
 def finish_round(request, data: FinishSchema):
     round = get_object_or_404(Round, id=data.round_id)
-    round.finish(score1=data.score1, score2=data.score2, abort=data.abort)
+    round.finish(score1=data.score1, score2=data.score2, hits1=data.hits1, hits2=data.hits2, abort=data.abort)
     return {'detail': 'ok'}
 
 
