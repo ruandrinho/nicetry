@@ -7,7 +7,7 @@ from typing import Optional
 
 from django.contrib import admin
 from django.db import models
-from django.db.models import Avg, F
+from django.db.models import Avg, F, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -72,6 +72,7 @@ class Topic(models.Model):
     matches = models.TextField('Словарь совпадений', default='{}')
     exclusions = models.CharField('Исключаемые слова', max_length=100, blank=True)
     average_score = models.FloatField('Средний результат', default=0)
+    average_score_hits_mode = models.FloatField('Средний результат в хитах', default=0)
     bot_answers = models.TextField('Список ответов бота', default='{}')
 
     objects = TopicQuerySet.as_manager()
@@ -124,13 +125,17 @@ class Topic(models.Model):
         matches = json.loads(self.matches)
         if text in matches:
             return list(TopicEntity.objects.filter(entity__id__in=matches[text], topic=self))
+        matching_ids = []
         for match in matches:
             if jellyfish.damerau_levenshtein_distance(match, text) <= 1:
-                return list(TopicEntity.objects.filter(entity__id__in=matches[match], topic=self))
+                matching_ids += matches[match]
+        if matching_ids:
+            return list(TopicEntity.objects.filter(entity__id__in=matching_ids, topic=self))
         return None
 
     def update_statistics(self) -> None:
-        self.average_score = self.rounds.finished().aggregate(avg=Avg('score1'))['avg']
+        self.average_score = self.rounds.finished().points_mode().aggregate(avg=Avg('score1'))['avg'] or 0
+        self.average_score_hits_mode = self.rounds.finished().hits_mode().aggregate(avg=Avg('score1'))['avg'] or 0
         self.save()
         TopicEntity.bulk_update_positions(topic=self)
 
@@ -375,13 +380,13 @@ class Player(models.Model):
         finished_rounds = self.rounds.finished()
         average_score = finished_rounds.aggregate(avg=Avg('score1'))['avg'] or 0
         self.average_score = round(average_score)
-        self.victories = finished_rounds.filter(score1__gt=F('score2')).count()
-        self.defeats = finished_rounds.filter(score1__lt=F('score2')).count()
-        self.draws = finished_rounds.filter(score1=F('score2')).count()
+        self.victories = finished_rounds.victories().count()
+        self.defeats = finished_rounds.defeats().count()
+        self.draws = finished_rounds.draws().count()
         last10_rounds = self.rounds.last_finished(10)
         last10_points = sum(round.score1 for round in last10_rounds)
-        last10_victories = sum(1 for round in last10_rounds if round.score1 > round.score2)
-        last10_draws = sum(1 for round in last10_rounds if round.score1 == round.score2)
+        last10_victories = sum(1 for round in last10_rounds if round.outcome == '1')
+        last10_draws = sum(1 for round in last10_rounds if round.outcome == '=')
         self.rating = last10_points + last10_victories * 40 + last10_draws * 20
         for i, value in enumerate(Config.topic_levels):
             if self.average_score < value:
@@ -402,11 +407,38 @@ class Player(models.Model):
 
 
 class RoundQuerySet(models.QuerySet):
+    def defeats(self):
+        points_mode_qs = self.filter(score1__lt=F('score2'), hits_mode=False)
+        hits_mode_qs = self.filter(
+            Q(hits1__lt=F('hits2')) | (Q(hits1=F('hits2')) & Q(score1__lt=F('score2'))),
+            hits_mode=True
+        )
+        return points_mode_qs | hits_mode_qs
+
+    def draws(self):
+        points_mode_qs = self.filter(score1=F('score2'), hits_mode=False)
+        hits_mode_qs = self.filter(hits1=F('hits2'), score1=F('score2'), hits_mode=True)
+        return points_mode_qs | hits_mode_qs
+
     def finished(self):
         return self.filter(finished_at__isnull=False)
 
+    def hits_mode(self):
+        return self.filter(hits_mode=True)
+
     def last_finished(self, count: int):
         return self.finished().order_by('-finished_at')[:count]
+
+    def points_mode(self):
+        return self.filter(hits_mode=False)
+
+    def victories(self):
+        points_mode_qs = self.filter(score1__gt=F('score2'), hits_mode=False)
+        hits_mode_qs = self.filter(
+            Q(hits1__gt=F('hits2')) | (Q(hits1=F('hits2')) & Q(score1__gt=F('score2'))),
+            hits_mode=True
+        )
+        return points_mode_qs | hits_mode_qs
 
 
 class Round(models.Model):
@@ -421,13 +453,16 @@ class Round(models.Model):
     )
     topic = models.ForeignKey(Topic, verbose_name='Тема', on_delete=models.PROTECT, related_name='rounds')
     duel = models.BooleanField('Дуэль', db_index=True, default=False)
-    score1 = models.PositiveSmallIntegerField('Очки первого игрока', default=0)
-    score2 = models.PositiveSmallIntegerField('Очки второго игрока', default=0)
+    hits_mode = models.BooleanField('Режим хитов', db_index=True, default=False)
+    score1 = models.PositiveSmallIntegerField('Очки 1', default=0)
+    score2 = models.PositiveSmallIntegerField('Очки 2', default=0)
+    hits1 = models.PositiveSmallIntegerField('Хиты 1', default=0)
+    hits2 = models.PositiveSmallIntegerField('Хиты 2', default=0)
     started_at = models.DateTimeField('Начало', auto_now_add=True)
     finished_at = models.DateTimeField('Окончание', null=True, blank=True)
-    bot_answers = models.TextField('Список возможных ответов бота', default='{}')
-    player1_feedback = models.TextField('Обратная связь от игрока 1')
-    player2_feedback = models.TextField('Обратная связь от игрока 1')
+    bot_answers = models.TextField('Возможные ответы бота', default='{}')
+    player1_feedback = models.TextField('Обратная связь 1')
+    player2_feedback = models.TextField('Обратная связь 2')
 
     objects = RoundQuerySet.as_manager()
 
@@ -443,13 +478,15 @@ class Round(models.Model):
         setattr(self, f'player{player}_feedback', feedback)
         self.save()
 
-    def finish(self, score1: int = 0, score2: int = 0, abort: bool = False) -> None:
+    def finish(self, score1: int = 0, score2: int = 0, hits1: int = 0, hits2: int = 0, abort: bool = False) -> None:
         if self.finished_at:
             return
         self.finished_at = timezone.now()
         if not abort:
             self.score1 = score1
             self.score2 = score2
+            self.hits1 = hits1
+            self.hits2 = hits2
             self.save()
             self.topic.update_statistics()
             self.player1.update_statistics()
@@ -477,11 +514,21 @@ class Round(models.Model):
         self.save()
 
     @property
-    def attempts_left(self) -> int:
-        return max(0, 5 - self.answers.filter(player=2).count())
+    def attempt(self) -> int:
+        return self.answers.filter(player=2).count() + 1
 
     @property
-    def outcome(self) -> str:
+    def outcome(self, hits_mode: bool = False) -> str:
+        if hits_mode:
+            if self.hits1 == self.hits2:
+                if self.score1 == self.score2:
+                    return '='
+                elif self.score1 > self.score2:
+                    return '1'
+                return '2'
+            elif self.hits1 > self.hits2:
+                return '1'
+            return '2'
         if self.score1 == self.score2:
             return '='
         elif self.score1 > self.score2:

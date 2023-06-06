@@ -27,7 +27,7 @@ class TopicEntityInline(admin.TabularInline):
 @admin.register(Topic)
 class TopicAdmin(admin.ModelAdmin):
     inlines = [TopicEntityInline]
-    list_display = ['title', 'average_score']
+    list_display = ['title', 'average_score', 'average_score_hits_mode']
     search_fields = ['title']
 
     def save_formset(self, request: Any, form: Any, formset: Any, change: Any) -> None:
@@ -104,11 +104,14 @@ class PlayerAdmin(admin.ModelAdmin):
 
 @admin.register(Round)
 class RoundAdmin(admin.ModelAdmin):
-    list_display = ['__str__', 'score1', 'score2', 'player1_answers', 'player2_answers', 'finished_at']
+    list_display = [
+        '__str__', 'hits_mode', 'score1', 'score2', 'hits1', 'hits2', 'player1_answers', 'player2_answers',
+        'finished_at'
+    ]
     list_filter = ['started_at', 'finished_at']
     readonly_fields = [
-        'player1', 'player2', 'topic', 'duel', 'score1', 'score2', 'player1_answers', 'player2_answers', 'finished_at',
-        'bot_answers', 'player1_feedback', 'player2_feedback'
+        'player1', 'player2', 'topic', 'duel', 'hits_mode', 'score1', 'score2', 'hits1', 'hits2', 'player1_answers',
+        'player2_answers', 'finished_at', 'bot_answers', 'player1_feedback', 'player2_feedback'
     ]
 
 
