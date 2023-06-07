@@ -384,10 +384,17 @@ class Player(models.Model):
         self.defeats = finished_rounds.defeats().count()
         self.draws = finished_rounds.draws().count()
         last10_rounds = self.rounds.last_finished(10)
-        last10_points = sum(round.score1 for round in last10_rounds)
-        last10_victories = sum(1 for round in last10_rounds if round.outcome == '1')
-        last10_draws = sum(1 for round in last10_rounds if round.outcome == '=')
-        self.rating = last10_points + last10_victories * 40 + last10_draws * 20
+        rating = 0
+        for round_ in last10_rounds:
+            round_rating = round_.score1
+            if round_.outcome == '1':
+                round_rating += 40
+            elif round_.outcome == '=':
+                round_rating += 20
+            days = (timezone.now().date() - round_.finished_at.date()).days
+            aging_coef = max(0, 1 - days*0.03)
+            rating += round_rating * aging_coef
+        self.rating = round(rating)
         for i, value in enumerate(Config.topic_levels):
             if self.average_score < value:
                 self.level = i

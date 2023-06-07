@@ -95,7 +95,7 @@ class PlayerAdmin(admin.ModelAdmin):
     inlines = [RoundInline]
     raw_id_fields = ['referrer']
     readonly_fields = [
-        'telegram_id', 'telegram_username', 'name', 'victories', 'defeats', 'draws', 'average_score', 'level',
+        'telegram_id', 'telegram_username', 'name', 'victories', 'defeats', 'draws', 'average_score', 'rating', 'level',
         'duel_victories', 'duel_defeats', 'duel_draws', 'duel_average_score', 'duel_rating', 'assigned_topics'
     ]
     search_fields = ['telegram_username', 'name']
