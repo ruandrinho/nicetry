@@ -587,7 +587,7 @@ class Answer(models.Model):
     text = models.TextField('Ответ')
     position = models.PositiveSmallIntegerField('Место', null=True, blank=True)
     sent_at = models.DateTimeField('Отправлен', auto_now_add=True)
-    discarded = models.BooleanField('Отклонён', db_index=True)
+    discarded = models.BooleanField('Отклонён', db_index=True, default=False)
 
     objects = AnswerQuerySet.as_manager()
 
