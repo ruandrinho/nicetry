@@ -123,8 +123,8 @@ class AnswerAdminForm(forms.ModelForm):
 
 @admin.register(Answer)
 class AnswerAdmin(admin.ModelAdmin):
-    list_display = ['text', 'player', 'position', 'round', 'topic_entity']
-    list_filter = [('topic_entity', admin.EmptyFieldListFilter), 'sent_at']
+    list_display = ['text', 'player', 'position', 'round', 'topic_entity', 'discarded']
+    list_filter = [('topic_entity', admin.EmptyFieldListFilter), 'sent_at', 'discarded']
     readonly_fields = ['round', 'text', 'player', 'position']
     search_fields = ['text', 'topic_entity__topic__title', 'topic_entity__entity__title']
 

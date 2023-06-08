@@ -28,7 +28,7 @@
     .answer-text {display: inline-block; font-size: 1.5rem;}
     .topic-title, .player {display: inline-block; color: gray; margin-left: 2rem;}
     .player {color: silver;}
-    form {padding-top: 0.5rem;}
+    form.answer {padding-top: 0.5rem;}
     select, input {width: 9rem; margin: 0 1rem 1rem 0; border: 1px solid silver; padding: 0.5rem;}
     select {color: silver;}
     select.chosen {color: black;}
@@ -41,6 +41,7 @@
     a.previous {border-right: 1px solid silver; padding-right: 1rem;}
     a.next {border-left: 1px solid silver; padding-left: 1rem;}
     span.current {padding: 0 1rem;}
+    form.discard {text-align: center; padding: 0 0 1rem 0;}
   </style>
 </head>
 
@@ -50,7 +51,7 @@
     <div class="answer-text">{{ answer.text }}</div>
     <div class="topic-title">{{ answer.round.topic.title }}</div>
     <div class="player">{{ answer.round.player1.displayed_name }}</div>
-    <form>
+    <form class="answer">
       <select class="topic-entity-select">
         <option>Topic Entity</option>
         {% for te in answer.topic_entities %}
@@ -74,7 +75,10 @@
     {% if page_obj.has_next %}
       <a href="?page={{ page_obj.next_page_number }}" class="next">Next page →</a>
     {% endif %}
-</div>
+  </div>
+  <form class="discard">
+    <button type="submit">Discard</button>
+  </form>
 
 <script>
 $(document).ready(function() {
@@ -110,7 +114,7 @@ $(document).ready(function() {
   $('.entity-title-input').on('change', function() {
     $(this).parent().find('.entity-pattern-input').val(simplifyText($(this).val()));
   });
-  $('form').on('submit', function(event) {
+  $('form.answer').on('submit', function(event) {
     event.preventDefault();
     const answerID = $(this).parent().attr('id').split('-')[1];
     const selectedTopicEntityID = $(this).find('.topic-entity-select').val();
@@ -143,6 +147,23 @@ $(document).ready(function() {
       });
       return;
     }
+  });
+  $('form.discard').on('submit', function(event) {
+    event.preventDefault();
+    const answerIDs = [];
+    $('div.answer').each(function() {
+      answerIDs.push($(this).attr('id').split('-')[1]);
+    });
+    $.ajax({
+      url: '/api/game/discard-answers',
+      method: 'POST',
+      contentType: 'application/json',
+      processData: false,
+      data: JSON.stringify({ids: answerIDs}),
+      success: function(response) {
+        location.reload();
+      }
+    });
   });
 });
 

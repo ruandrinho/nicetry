@@ -271,3 +271,13 @@ class EntitySchema(Schema):
 @router.get('/entities', response={200: list[EntitySchema]})
 def search_entities(request, term: str):
     return Entity.objects.filter(title__icontains=term)
+
+
+class AnswerGroupModerationSchema(Schema):
+    ids: list[int]
+
+
+@router.post('discard-answers', response={200: Message200})
+def discard_answers(request, data: AnswerGroupModerationSchema):
+    Answer.discard(data.ids)
+    return {'detail': 'ok'}

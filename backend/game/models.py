@@ -557,7 +557,7 @@ class Round(models.Model):
 
 class AnswerQuerySet(models.QuerySet):
     def unbound(self):
-        return self.filter(topic_entity__isnull=True)
+        return self.filter(topic_entity__isnull=True, discarded=False)
 
     def with_topic_entities(self):
         topic_entities_cache = {}
@@ -587,11 +587,16 @@ class Answer(models.Model):
     text = models.TextField('Ответ')
     position = models.PositiveSmallIntegerField('Место', null=True, blank=True)
     sent_at = models.DateTimeField('Отправлен', auto_now_add=True)
+    discarded = models.BooleanField('Отклонён', db_index=True)
 
     objects = AnswerQuerySet.as_manager()
 
     def __str__(self) -> str:
         return f'{self.round} — {self.text}'
+
+    @classmethod
+    def discard(cls, ids: list[int]):
+        cls.objects.filter(id__in=ids).update(discarded=True)
 
     @classmethod
     def get_or_create(
