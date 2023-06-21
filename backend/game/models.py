@@ -511,6 +511,10 @@ class Round(models.Model):
         bot_answers = json.loads(self.bot_answers)
         if str(topic_entity_id) in bot_answers:
             del bot_answers[str(topic_entity_id)]
+        if not bot_answers:
+            used_ids = [answer.topic_entity.id for answer in self.answers.bound()]
+            topic_entities = self.topic.topic_entities.exclude(id__in=used_ids).filter(position__lt=11)
+            bot_answers = {te.id: te.entity.title for te in topic_entities}
         self.update_bot_answers(json.dumps(bot_answers, ensure_ascii=False))
 
     def update_bot_answers(self, bot_answers: str = '') -> None:
@@ -556,6 +560,9 @@ class Round(models.Model):
 
 
 class AnswerQuerySet(models.QuerySet):
+    def bound(self):
+        return self.filter(topic_entity__isnull=False)
+
     def unbound(self):
         return self.filter(topic_entity__isnull=True, discarded=False)
 

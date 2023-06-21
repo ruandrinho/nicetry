@@ -160,10 +160,6 @@ class AttemptSchema(Schema):
 @router.post('/answer', response={200: AttemptSchema, 403: Message403, 404: Message404})
 def answer(request, data: AnswerSchema):
     round = get_object_or_404(Round, id=data.round_id)
-    # Может ли возникнуть такая ситуация?
-    # attempts_left = round.attempts_left
-    # if not attempts_left:
-    #     return 403, {'detail': 'Все попытки использованы'}
 
     skipped = data.answer == '-'
 
