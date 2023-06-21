@@ -269,11 +269,17 @@ def search_entities(request, term: str):
     return Entity.objects.filter(title__icontains=term)
 
 
-class AnswerGroupModerationSchema(Schema):
+class ObjectGroupModerationSchema(Schema):
     ids: list[int]
 
 
 @router.post('discard-answers', response={200: Message200})
-def discard_answers(request, data: AnswerGroupModerationSchema):
+def discard_answers(request, data: ObjectGroupModerationSchema):
     Answer.discard(data.ids)
+    return {'detail': 'ok'}
+
+
+@router.post('check-rounds', response={200: Message200})
+def check_rounds(request, data: ObjectGroupModerationSchema):
+    Round.set_checked(data.ids)
     return {'detail': 'ok'}

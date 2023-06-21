@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Раунды</title>
+  <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.0/jquery.min.js"
+    integrity="sha512-3gJwYpMe3QewGELv8k/BX9vcqhryRdzRMxVfq6ngyWXwo03GFEzjsUm8Q7RZcHPHksttq7/GFoxjCVUjkjvPdw=="
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer">
+  </script>
+  <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.13.2/jquery-ui.min.js"
+    integrity="sha512-57oZ/vW8ANMjR/KQ6Be9v/+/h6bq9/l3f0Oc7vn6qMqyhvPd1cvKBRWWpzu0QoneImqr2SkmO4MSqU+RpHom3Q=="
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer">
+  </script>
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.13.2/themes/base/jquery-ui.min.css"
+    integrity="sha512-ELV+xyi8IhEApPS/pSj66+Jiw+sOT1Mqkzlh8ExXihe4zfqbWkxPRi8wptXIO9g73FSlhmquFlUOuMSoXz5IRw=="
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  />
+  <style>
+    html {font-size: 1.5vh;}
+    body {max-width: 90vmin; font-family: sans-serif; margin: 0 auto;}
+    .round {background: #EEE; border-bottom: 1px solid silver; padding: 1vh;}
+    .round h1 {font-size: 1.3rem; font-weight: normal; margin: 1vh 0;}
+    .round h1 a {color: darkgrey; font-size: 1rem;}
+    .round p {margin: 0 0 1vh 0;}
+    .round p span {margin: 0 0.5vh;}
+    .unbound-answer {background: white; padding: 1vh 0 0 1vh;}
+    .unbound-answer p {display: inline-block; font-size: 1.3rem; margin: 0; padding: 0;}
+    form.answer {padding-top: 1vh;}
+    select, input {width: 16vh; font-size: 1rem; margin: 0 1.1vh 1.1vh 0; border: 1px solid silver; padding: 1vh;}
+    select {width: 18vh; color: silver;}
+    select.chosen {color: black;}
+    option {color: black;}
+    button {font-size: 1rem; margin-bottom: 1.1vh; padding: 1vh;}
+    ::placeholder {color: silver;}
+    .ui-autocomplete {max-height: 40vh; overflow-y: auto; overflow-x: hidden;}
+    .pagination {text-align: center; padding: 2vh 0;}
+    .pagination a {text-decoration: none;}
+    a.previous {border-right: 1px solid silver; padding-right: 2vw;}
+    a.next {border-left: 1px solid silver; padding-left: 2vw;}
+    span.current {padding: 0 2vw;}
+    form.accept {text-align: center; padding: 0 0 2vh 0;}
+  </style>
+</head>
+
+<body>
+  {% for round in round_list %}
+  <div class="round" id="round-{{ round.id }}">
+    <h1>{{ round }} <a href="{% url 'admin:game_round_change' round.id %}">{{ round.id }}</a></h1>
+    <p class="player1_answers">
+    {% for answer in round.answers.by_player1 %}
+      {{ answer.text }}{% if answer.topic_entity %} / {{ answer.topic_entity.entity.title }}{% endif %}
+      {% if answer.position %} ({{ answer.position }}){% endif %}
+      {% if not forloop.last %}<span></span>{% endif %}
+    {% endfor %}
+    </p>
+    {% if round.player1_feedback %}<p class="player1_feedback">{{ round.player1_feedback }}</p>{% endif %}
+    {% for answer in round.answers.unbound %}
+      <div class="unbound-answer" id="answer-{{ answer.id }}">
+        <p>{{ answer.text }}</p>
+        <form class="answer">
+          <select class="topic-entity-select">
+            <option>Topic Entity</option>
+            {% for te in round.topic.topic_entities.all|dictsort:"entity.title" %}
+            <option value="{{ te.id }}" pattern="{{ te.entity.pattern }}">{{ te.entity.title }}</option>
+            {% endfor %}
+          </select>
+          <input class="entity-input" type="text" placeholder="Entity">
+          <input class="entity-title-input" type="text" placeholder="Entity Title">
+          <input class="entity-pattern-input" type="text" placeholder="Entity Pattern">
+          <button type="submit">Save</button>
+        </form>
+      </div>
+    {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+  <div class="pagination">
+    {% if page_obj.has_previous %}
+      <a href="?page={{ page_obj.previous_page_number }}" class="previous">← Previous page</a>
+    {% endif %}
+    <span class="current">
+      Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+    </span>
+    {% if page_obj.has_next %}
+      <a href="?page={{ page_obj.next_page_number }}" class="next">Next page →</a>
+    {% endif %}
+  </div>
+  <form class="accept">
+    <button type="submit">Accept</button>
+  </form>
+
+<script>
+$(document).ready(function() {
+  $('.entity-input').each(function() {
+    const answerID = $(this).parent().parent().attr('id').split('-')[1];
+    $(this).autocomplete({
+      minLength: 2,
+      source: function(request, response) {
+        $.get('/api/game/entities', { term: request.term }, function(data) {
+          var formattedData = data.map(function(item) {
+            return {
+              label: `${item.title} :: ${item.pattern}`,
+              value: item.id
+            };
+          });
+          response(formattedData);
+        });
+      },
+      select: function(event, ui) {
+        let [title, pattern] = ui.item.label.split(' :: ');
+        $(this).attr('selected-id', ui.item.value).val(ui.item.label);
+        $(this).parent().find('.entity-title-input').val(title);
+        $(this).parent().find('.entity-pattern-input').val(pattern);
+        event.preventDefault();
+      }
+    });
+  });
+  $('select').on('change', function() {
+    $(this).addClass('chosen');
+    $(this).parent().find('.entity-title-input').val($(this).find('option:selected').text());
+    $(this).parent().find('.entity-pattern-input').val($(this).find('option:selected').attr('pattern'));
+  });
+  $('.entity-title-input').on('change', function() {
+    $(this).parent().find('.entity-pattern-input').val(simplifyText($(this).val()));
+  });
+  $('form.answer').on('submit', function(event) {
+    event.preventDefault();
+    const answerID = $(this).parent().attr('id').split('-')[1];
+    const selectedTopicEntityID = $(this).find('.topic-entity-select').val();
+    const entityTitle = $(this).find('.entity-title-input').val();
+    const entityPattern = $(this).find('.entity-pattern-input').val();
+    if (selectedTopicEntityID && selectedTopicEntityID != 'Topic Entity') {
+      putAnswer($(this), {
+        answer_id: answerID,
+        topic_entity_id: selectedTopicEntityID,
+        entity_title: entityTitle,
+        entity_pattern: entityPattern
+      });
+      return;
+    }
+    const selectedEntityID = $(this).find('.entity-input').attr('selected-id');
+    if (selectedEntityID) {
+      putAnswer($(this), {
+        answer_id: answerID,
+        entity_id: selectedEntityID,
+        entity_title: entityTitle,
+        entity_pattern: entityPattern
+      });
+      return;
+    }
+    if (entityTitle && entityPattern) {
+      putAnswer($(this), {
+        answer_id: answerID,
+        entity_title: entityTitle,
+        entity_pattern: entityPattern
+      });
+      return;
+    }
+  });
+  $('form.accept').on('submit', function(event) {
+    event.preventDefault();
+    const roundIDs = [];
+    $('div.round').each(function() {
+      roundIDs.push($(this).attr('id').split('-')[1]);
+    });
+    $.ajax({
+      url: '/api/game/check-rounds',
+      method: 'POST',
+      contentType: 'application/json',
+      processData: false,
+      data: JSON.stringify({ids: roundIDs}),
+      success: function(response) {
+        location.reload();
+      }
+    });
+  });
+});
+
+function putAnswer(form, data) {
+  const div = form.parent();
+  $.ajax({
+    url: '/api/game/answer',
+    method: 'PUT',
+    contentType: 'application/json',
+    processData: false,
+    data: JSON.stringify(data),
+    success: function(response) {
+      div.fadeOut('normal', function() {
+        div.remove();
+      });
+    }
+  });
+}
+
+function removeSuccessiveLetters(s) {
+  let result = [];
+  let lastChar = '';
+  let group = '';
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] != lastChar || s[i].match(/[0-9ix+]/)) {
+      if (group.length > 0) {
+        result.push(group[0]);
+      }
+      group = s[i];
+    } else {
+      group += s[i];
+    }
+    lastChar = s[i];
+  }
+  if (group.length > 0) {
+    result.push(group[0]);
+  }
+  return result.join('');
+}
+
+function simplifyText(text) {
+  text = text.toLowerCase().replace(/э/g, 'е').replace(/ё/g, 'е').replace(/й/g, 'и');
+  text = text.replace(/[^0-9a-zа-я ]/gi, '');
+  text = removeSuccessiveLetters(text);
+  return text;
+}
+</script>
+</body>
+
+</html>

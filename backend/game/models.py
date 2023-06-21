@@ -343,7 +343,10 @@ class Player(models.Model):
     objects = PlayerQuerySet.as_manager()
 
     def __str__(self) -> str:
-        return f'{self.name} id {self.telegram_id}'
+        name = self.name
+        if self.telegram_username:
+            name += f' @{self.telegram_username}'
+        return name
 
     @classmethod
     def find(cls, **kwargs) -> Optional['Player']:
@@ -470,6 +473,7 @@ class Round(models.Model):
     bot_answers = models.TextField('Возможные ответы бота', default='{}')
     player1_feedback = models.TextField('Обратная связь 1')
     player2_feedback = models.TextField('Обратная связь 2')
+    checked = models.BooleanField('Проверен', db_index=True, default=False)
 
     objects = RoundQuerySet.as_manager()
 
@@ -478,8 +482,20 @@ class Round(models.Model):
         unique_together = ['player1', 'player2', 'topic']
 
     def __str__(self) -> str:
-        player2 = self.player2 if self.player2 else 'bot'
-        return f'{self.topic} — {self.player1} vs {player2}'
+        player2 = self.player2 if self.player2 else 'Bot'
+        if self.finished_at:
+            if self.hits_mode:
+                outcome = f'{self.hits1}:{self.hits2} ({self.score1}:{self.score2})'
+            else:
+                outcome = f'{self.score1}:{self.score2}'
+        else:
+            outcome = 'vs'
+        return f'{self.topic} — {self.player1} {outcome} {player2}'
+
+    @classmethod
+    def set_checked(cls, ids: list[int]):
+        cls.objects.filter(id__in=ids).update(checked=True)
+        Answer.objects.filter(round_id__in=ids).unbound().update(discarded=True)
 
     def add_feedback(self, feedback: str, player: int = 1) -> None:
         setattr(self, f'player{player}_feedback', feedback)
@@ -562,6 +578,9 @@ class Round(models.Model):
 class AnswerQuerySet(models.QuerySet):
     def bound(self):
         return self.filter(topic_entity__isnull=False)
+
+    def by_player1(self):
+        return self.filter(player=1)
 
     def unbound(self):
         return self.filter(topic_entity__isnull=True, discarded=False)
