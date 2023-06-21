@@ -128,6 +128,7 @@ async def handle_interrupting_start(message: Message, state: FSMContext) -> None
 @game_router.callback_query(Text('main'), GameStates.interruption)
 async def handle_interruption_confirmation(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     user_data = await state.get_data()
+    score1, score2, hits1, hits2 = user_data['score1'], user_data['score2'], user_data['hits1'], user_data['hits2']
     with suppress(TelegramBadRequest):
         if 'interrupting_message_id' in user_data:
             await bot.delete_message(chat_id=callback.message.chat.id, message_id=user_data['interrupting_message_id'])
@@ -141,7 +142,11 @@ async def handle_interruption_confirmation(callback: CallbackQuery, state: FSMCo
                 f'{API}/finish',
                 json={
                     'round_id': user_data['round_id'],
-                    'abort': True
+                    'abort': True,
+                    'score1': score1,
+                    'score2': score2,
+                    'hits1': hits1,
+                    'hits2': hits2
                 }
             ):
                 logger.info(f'GAME Aborted round {user_data["round_id"]} by {format_player(user_data["player"])}')
