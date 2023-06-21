@@ -505,16 +505,13 @@ class Round(models.Model):
         if self.finished_at:
             return
         self.finished_at = timezone.now()
-        if not abort:
-            self.score1 = score1
-            self.score2 = score2
-            self.hits1 = hits1
-            self.hits2 = hits2
-            self.save()
-            self.topic.update_statistics()
-            self.player1.update_statistics()
-        else:
-            self.save()
+        self.score1 = 0 if abort else score1
+        self.score2 = score2
+        self.hits1 = 0 if abort else hits1
+        self.hits2 = hits2
+        self.save()
+        self.topic.update_statistics()
+        self.player1.update_statistics()
 
     def get_bot_answer(self) -> tuple[str, TopicEntity]:
         bot_answers_slice = list(json.loads(self.bot_answers).items())[0:3]
