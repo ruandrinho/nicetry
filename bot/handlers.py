@@ -45,6 +45,7 @@ class GameStates(StatesGroup):
     answer = State()
     feedback = State()
     interruption = State()
+    sleep = State()
 
 
 @game_router.message(Command('spam'), F.from_user.id == ADMIN_ID)
@@ -410,6 +411,7 @@ async def handle_query_answer(callback: CallbackQuery, state: FSMContext, bot: B
 
 
 async def handle_bot_answer(message: Message, state: FSMContext, bot: Bot, result: dict) -> None:
+    await state.set_state(GameStates.sleep)
     bot_answer = Messages.bot_answer.replace('ANSWER', result['bot_answer'])
     if result['bot_answer_entity']['position'] > 10:
         bot_answer += Messages.bot_miss
@@ -430,6 +432,7 @@ async def handle_bot_answer(message: Message, state: FSMContext, bot: Bot, resul
         attempt_message = getattr(Messages, f'attempt{result["attempt"]}')
     new_message = await message.answer(attempt_message)
     await state.update_data(new_message_id=new_message.message_id)
+    await state.set_state(GameStates.answer)
     if user_data['hits_mode']:
         if user_data['hits1'] < 3 and user_data['hits2'] < 3:
             return
@@ -485,6 +488,7 @@ async def handle_hit(
 
 
 async def handle_results(message: Message, state: FSMContext, bot: Bot) -> None:
+    await state.set_state(GameStates.sleep)
     user_data = await state.get_data()
     referral = await encode_referral(user_data['topic_id'], user_data['player']['id'])
     score1, score2, hits1, hits2 = user_data['score1'], user_data['score2'], user_data['hits1'], user_data['hits2']
@@ -515,17 +519,6 @@ async def handle_results(message: Message, state: FSMContext, bot: Bot) -> None:
     deeplink = f'https://t.me/NiceTryGameBot?start={referral}'
     formatted_results = await format_hits(user_data['hits'])
     await bot.unpin_chat_message(chat_id=message.chat.id, message_id=user_data['pinned_message_id'])
-    await bot.send_chat_action(message.chat.id, 'typing')
-    await asyncio.sleep(2)
-    await message.answer_photo(
-        Images.results,
-        f'{outcome_message}\n\n{formatted_results}',
-        reply_markup=await get_keyboard(
-            [['main', 'game_again'], ['feedback', 'challenge']],
-            deeplink=deeplink,
-            challenge_message=challenge_message
-        )
-    )
     async with aiohttp.ClientSession() as session:
         async with session.post(
             f'{API}/finish',
@@ -545,6 +538,17 @@ async def handle_results(message: Message, state: FSMContext, bot: Bot) -> None:
         'deeplink': deeplink,
         'challenge_message': challenge_message
     })
+    await bot.send_chat_action(message.chat.id, 'typing')
+    await asyncio.sleep(2)
+    await message.answer_photo(
+        Images.results,
+        f'{outcome_message}\n\n{formatted_results}',
+        reply_markup=await get_keyboard(
+            [['main', 'game_again'], ['feedback', 'challenge']],
+            deeplink=deeplink,
+            challenge_message=challenge_message
+        )
+    )
     await state.set_state(GameStates.main)
 
 
@@ -579,6 +583,11 @@ async def handle_feedback_message(message: Message, state: FSMContext) -> None:
         )
     )
     await state.set_state(GameStates.main)
+
+
+@game_router.message(F.text, GameStates.sleep)
+async def handle_sleep(message: Message, state: FSMContext) -> None:
+    pass
 
 
 @game_router.message(F.text)
