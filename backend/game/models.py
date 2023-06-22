@@ -471,6 +471,7 @@ class Round(models.Model):
     started_at = models.DateTimeField('Начало', auto_now_add=True)
     finished_at = models.DateTimeField('Окончание', null=True, blank=True)
     bot_answers = models.TextField('Возможные ответы бота', default='{}')
+    declined_answers = models.TextField('Отклонённые ответы', default='[]')
     player1_feedback = models.TextField('Обратная связь 1')
     player2_feedback = models.TextField('Обратная связь 2')
     checked = models.BooleanField('Проверен', db_index=True, default=False)
@@ -496,6 +497,12 @@ class Round(models.Model):
     def set_checked(cls, ids: list[int]):
         cls.objects.filter(id__in=ids).update(checked=True)
         Answer.objects.filter(round_id__in=ids).unbound().update(discarded=True)
+
+    def add_declined_answer(self, text: str, entity_title: str) -> None:
+        declined_answers = json.loads(self.declined_answers)
+        declined_answers.append((text, entity_title))
+        self.declined_answers = json.dumps(declined_answers, ensure_ascii=False)
+        self.save()
 
     def add_feedback(self, feedback: str, player: int = 1) -> None:
         setattr(self, f'player{player}_feedback', feedback)

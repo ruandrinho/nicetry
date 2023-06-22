@@ -29,6 +29,8 @@
     .round h1 {font-size: 1.3rem; font-weight: normal; margin: 1vh 0;}
     .round h1 a {color: darkgrey; font-size: 1rem;}
     .round p {margin: 0 0 1vh 0;}
+    .round p.player1_feedback {font-style: italic;}
+    .round p.declined_answers {color: darkgrey;}
     .round p span {margin: 0 0.5vh;}
     .unbound-answer {background: white; padding: 1vh 0 0 1vh;}
     .unbound-answer p {display: inline-block; font-size: 1.3rem; margin: 0; padding: 0;}
@@ -55,12 +57,13 @@
     <h1>{{ round }} <a href="{% url 'admin:game_round_change' round.id %}">{{ round.id }}</a></h1>
     <p class="player1_answers">
     {% for answer in round.answers.by_player1 %}
-      {{ answer.text }}{% if answer.topic_entity %} / {{ answer.topic_entity.entity.title }}{% endif %}
+      {{ answer.text }}{% if answer.topic_entity %} • {{ answer.topic_entity.entity.title }}{% endif %}
       {% if answer.position %} ({{ answer.position }}){% endif %}
       {% if not forloop.last %}<span></span>{% endif %}
     {% endfor %}
     </p>
     {% if round.player1_feedback %}<p class="player1_feedback">{{ round.player1_feedback }}</p>{% endif %}
+    {% if round.declined_answers %}<p class="declined_answers">{{ round.declined_answers }}</p>{% endif %}
     {% for answer in round.answers.unbound %}
       <div class="unbound-answer" id="answer-{{ answer.id }}">
         <p>{{ answer.text }}</p>

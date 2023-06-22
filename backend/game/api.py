@@ -167,6 +167,7 @@ def answer(request, data: AnswerSchema):
         topic_entity = get_object_or_404(TopicEntity, id=data.entity_id)
         created = Answer.get_or_create(round=round, topic_entity=topic_entity, text=data.answer)
         if not created:
+            round.add_declined_answer(data.answer, 'CHOICE REPEAT')
             return 403, {'detail': 'Этот ответ засчитан, введите другой'}
         bot_answer, bot_answer_entity = round.get_bot_answer()
         return {
@@ -181,6 +182,7 @@ def answer(request, data: AnswerSchema):
         if not skipped:
             created = Answer.get_or_create(round=round, text=data.answer)
             if not created:
+                round.add_declined_answer(data.answer, 'NEW REPEAT')
                 return 403, {'detail': 'Этот ответ засчитан, введите другой'}
         bot_answer, bot_answer_entity = round.get_bot_answer()
         return {
@@ -192,6 +194,7 @@ def answer(request, data: AnswerSchema):
     elif len(topic_entities) == 1:
         created = Answer.get_or_create(round=round, topic_entity=topic_entities[0], text=data.answer)
         if not created:
+            round.add_declined_answer(data.answer, topic_entities[0].entity.title)
             return 403, {'detail': 'Этот ответ засчитан, введите другой'}
         bot_answer, bot_answer_entity = round.get_bot_answer()
         return {
