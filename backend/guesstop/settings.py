@@ -143,9 +143,11 @@ LOGGING = {
             "class": "logging.StreamHandler",
         },
         "file": {
-            "level": "INFO",
-            "class": "logging.FileHandler",
-            "filename": "django.log",
+            'level': 'DEBUG',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': '/var/log/django/debug.log',
+            'maxBytes': 1024*1024,
+            'backupCount': 10,
         },
     },
     "loggers": {
