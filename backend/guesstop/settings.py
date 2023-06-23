@@ -143,7 +143,7 @@ LOGGING = {
             "class": "logging.StreamHandler",
         },
         "file": {
-            'level': 'DEBUG',
+            'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',
             'filename': '/var/log/django/debug.log',
             'maxBytes': 1024*1024,
@@ -153,7 +153,7 @@ LOGGING = {
     "loggers": {
         "django": {
             "handlers": ["console", "file"],
-            'level': 'DEBUG',
+            'level': 'INFO',
             'propagate': False,
         },
     },

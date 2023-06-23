@@ -19,5 +19,4 @@ class AnswerListView(ListView):
     template_name = 'answer_list.html'
 
     def get_queryset(self):
-        logger.warning('test warning')
         return Answer.objects.order_by('-sent_at').unbound().with_topic_entities()
