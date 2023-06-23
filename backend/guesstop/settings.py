@@ -153,6 +153,7 @@ LOGGING = {
     "loggers": {
         "django": {
             "handlers": ["console", "file"],
+            'propagate': False,
         },
     },
 }
