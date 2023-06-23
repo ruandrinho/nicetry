@@ -1,6 +1,10 @@
+import logging
+
 from django.views.generic.list import ListView
 
 from .models import Answer, Round
+
+logger = logging.getLogger(__name__)
 
 
 class RoundListView(ListView):
@@ -15,4 +19,5 @@ class AnswerListView(ListView):
     template_name = 'answer_list.html'
 
     def get_queryset(self):
+        logger.warning('test warning')
         return Answer.objects.order_by('-sent_at').unbound().with_topic_entities()
