@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from contextlib import suppress
+from logging.handlers import RotatingFileHandler
 from random import choice
 
 import aiohttp
@@ -13,7 +14,7 @@ from aiogram.fsm.state import State, StatesGroup, default_state
 from aiogram.fsm.storage.redis import Redis
 from aiogram.types import CallbackQuery, Message
 
-from config import Messages, Images, ADMIN_ID, API, OPEN
+from config import Messages, Images, ADMIN_ID, API, OPEN, LOG_FILE
 from utils import (
     decode_referral,
     encode_referral,
@@ -30,7 +31,7 @@ logging.basicConfig(
     format='[%(asctime)s: %(levelname)s] %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler('bot.log')
+        RotatingFileHandler(LOG_FILE, maxBytes=1024*1024, backupCount=10)
     ]
 )
 logger = logging.getLogger(__name__)

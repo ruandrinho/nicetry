@@ -145,7 +145,7 @@ LOGGING = {
         "file": {
             'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': '/var/log/django/debug.log',
+            'filename': env.str('LOG_FILE', '/var/log/django/debug.log'),
             'maxBytes': 1024*1024,
             'backupCount': 10,
         },

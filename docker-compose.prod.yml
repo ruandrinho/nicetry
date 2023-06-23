@@ -21,6 +21,7 @@ services:
     build: ./bot
     volumes:
       - ./bot:/bot
+      - /var/log/bot:/var/log/bot
     depends_on:
       - backend
       - redis
