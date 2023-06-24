@@ -520,7 +520,8 @@ async def handle_results(message: Message, state: FSMContext, bot: Bot) -> None:
             outcome_message = Messages.outcome_victory
         else:
             outcome_message = Messages.outcome_defeat
-    outcome_message = outcome_message.replace('RESULT', outcome)
+    outcome_message = outcome_message.replace('RESULT', html.bold(outcome))
+    rating_message = ''
     challenge_message = Messages.challenge.replace('TOPIC', user_data['topic_title']).replace('RESULT', outcome_message)
     deeplink = f'https://t.me/NiceTryGameBot?start={referral}'
     formatted_results = await format_hits(user_data['hits'])
@@ -535,8 +536,15 @@ async def handle_results(message: Message, state: FSMContext, bot: Bot) -> None:
                 'hits1': hits1,
                 'hits2': hits2
             }
-        ):
-            logger.info(f'GAME Finished round {user_data["round_id"]} with {outcome}')
+        ) as response:
+            decoded_response = await response.json()
+            if response.status == 200:
+                logger.info(f'GAME Finished round {user_data["round_id"]} with {outcome}')
+                rating_message = Messages.rating_change.replace('RATING', html.bold(str(decoded_response['rating']))).\
+                    replace('POSITION', html.bold(str(decoded_response['position'])))
+            else:
+                logger.warning(f'GAME Finishing round "{user_data["round_id"]}" with {outcome}: '
+                               f'{decoded_response["detail"]}')
     await state.set_data({
         'player': user_data['player'],
         'round_id': user_data['round_id'],
@@ -548,7 +556,7 @@ async def handle_results(message: Message, state: FSMContext, bot: Bot) -> None:
     await asyncio.sleep(2)
     await message.answer_photo(
         Images.results,
-        f'{outcome_message}\n\n{formatted_results}',
+        f'{outcome_message}\n\n{rating_message}\n\n{formatted_results}',
         reply_markup=await get_keyboard(
             [['main', 'game_again'], ['feedback', 'challenge']],
             deeplink=deeplink,

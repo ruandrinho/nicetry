@@ -52,6 +52,7 @@ class Messages():
     outcome_defeat = 'Итоговый счёт — RESULT в пользу ChatGPT'
     outcome_draw = 'Итоговый счёт — RESULT'
     outcome_victory = 'Итоговый счёт — RESULT в вашу пользу'
+    rating_change = 'Ваш рейтинг: RATING, место: POSITION'
     rating_formula = dedent('''\
         Рейтинг рассчитывается по формуле: О + П×40 + Н×20, где:
         О — сумма очков в последних 10  партиях,
