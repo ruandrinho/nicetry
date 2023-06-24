@@ -379,7 +379,7 @@ class Player(models.Model):
         self.assigned_topics = ''
         self.save()
 
-    def update_statistics(self) -> None:
+    def update_statistics(self) -> int:
         finished_rounds = self.rounds.finished()
         average_score = finished_rounds.aggregate(avg=Avg('score1'))['avg'] or 0
         self.average_score = round(average_score)
@@ -403,6 +403,7 @@ class Player(models.Model):
                 self.level = i
                 break
         self.save()
+        return self.rating
 
     @property
     def displayed_name(self) -> str:
@@ -508,7 +509,14 @@ class Round(models.Model):
         setattr(self, f'player{player}_feedback', feedback)
         self.save()
 
-    def finish(self, score1: int = 0, score2: int = 0, hits1: int = 0, hits2: int = 0, abort: bool = False) -> None:
+    def finish(
+            self,
+            score1: int = 0,
+            score2: int = 0,
+            hits1: int = 0,
+            hits2: int = 0,
+            abort: bool = False
+    ) -> tuple[int, int]:
         if self.finished_at:
             return
         self.finished_at = timezone.now()
@@ -518,7 +526,8 @@ class Round(models.Model):
         self.hits2 = hits2
         self.save()
         self.topic.update_statistics()
-        self.player1.update_statistics()
+        rating = self.player1.update_statistics()
+        return rating, self.player1.position
 
     def get_bot_answer(self) -> tuple[str, TopicEntity]:
         bot_answers_slice = list(json.loads(self.bot_answers).items())[0:3]

@@ -254,11 +254,22 @@ class FinishSchema(Schema):
     abort: bool = False
 
 
-@router.post('/finish', response={200: Message200, 404: Message404})
+class ResultSchema(Schema):
+    rating: int = 0
+    position: int = 0
+
+
+@router.post('/finish', response={200: ResultSchema, 404: Message404})
 def finish_round(request, data: FinishSchema):
     round = get_object_or_404(Round, id=data.round_id)
-    round.finish(score1=data.score1, score2=data.score2, hits1=data.hits1, hits2=data.hits2, abort=data.abort)
-    return {'detail': 'ok'}
+    rating, position = round.finish(
+        score1=data.score1,
+        score2=data.score2,
+        hits1=data.hits1,
+        hits2=data.hits2,
+        abort=data.abort
+    )
+    return {'rating': rating, 'position': position}
 
 
 class EntitySchema(Schema):
