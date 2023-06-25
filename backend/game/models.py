@@ -133,11 +133,17 @@ class Topic(models.Model):
             return list(TopicEntity.objects.filter(entity__id__in=matching_ids, topic=self))
         return None
 
+    def update_entities_positions(self) -> None:
+        queryset = list(TopicEntity.objects.filter(topic=self).order_by('-answers_count'))
+        for i, entity in enumerate(queryset, start=1):
+            entity.position = i
+        TopicEntity.objects.bulk_update(queryset, ['position'])
+
     def update_statistics(self) -> None:
         self.average_score = self.rounds.finished().points_mode().aggregate(avg=Avg('score1'))['avg'] or 0
         self.average_score_hits_mode = self.rounds.finished().hits_mode().aggregate(avg=Avg('score1'))['avg'] or 0
         self.save()
-        TopicEntity.bulk_update_positions(topic=self)
+        self.update_entities_positions()
 
 
 class Entity(models.Model):
@@ -666,11 +672,11 @@ class Answer(models.Model):
             )
         return created
 
-    def assign_topic_entity(self, id: int | None = None, topic_entity: TopicEntity | None = None) -> None:
-        if id:
-            topic_entity = get_object_or_404(TopicEntity, id=id)
+    def assign_topic_entity(self, topic_entity_id: int | None = None, topic_entity: TopicEntity | None = None) -> None:
+        if topic_entity_id:
+            topic_entity = get_object_or_404(TopicEntity, id=topic_entity_id)
         if topic_entity:
             self.topic_entity = topic_entity
             self.save()
             topic_entity.increment_answers_count()
-            TopicEntity.bulk_update_positions(self.round.topic)
+            self.round.topic.update_entities_positions()
