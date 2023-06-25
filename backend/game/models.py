@@ -323,13 +323,15 @@ class Player(models.Model):
     defeats = models.PositiveSmallIntegerField('Число поражений', default=0)
     draws = models.PositiveSmallIntegerField('Число ничьих', default=0)
     average_score = models.PositiveSmallIntegerField('Среднее число очков', default=0)
-    rating = models.PositiveSmallIntegerField('Рейтинг против бота', default=0)
+    rating = models.PositiveSmallIntegerField('Обычный рейтинг', default=0)
+    best_rating = models.PositiveSmallIntegerField('Наилучший обычный рейтинг', default=0)
+    best_rating_reached_at = models.DateTimeField('Наилучший обычный рейтинг установлен', blank=True, null=True)
     level = models.PositiveSmallIntegerField('Уровень', default=3)
     duel_victories = models.PositiveSmallIntegerField('Число побед в дуэлях', default=0)
     duel_defeats = models.PositiveSmallIntegerField('Число поражений в дуэлях', default=0)
     duel_draws = models.PositiveSmallIntegerField('Число ничьих в дуэлях', default=0)
     duel_average_score = models.PositiveSmallIntegerField('Среднее число очков в дуэлях', default=0)
-    duel_rating = models.PositiveSmallIntegerField('Рейтинг в дуэлях', default=0)
+    duel_rating = models.PositiveSmallIntegerField('Дуэльный рейтинг', default=0)
     assigned_topics = models.CharField('Список назначенных тем', max_length=20)
     referrer = models.ForeignKey(
         'Player',
@@ -402,6 +404,9 @@ class Player(models.Model):
             if self.average_score < value:
                 self.level = i
                 break
+        if rating > self.best_rating:
+            self.best_rating = rating
+            self.best_rating_reached_at = timezone.now()
         self.save()
         return self.rating
 
