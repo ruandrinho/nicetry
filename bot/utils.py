@@ -73,6 +73,7 @@ async def format_rating(top_players: list[dict], current_player: dict) -> str:
     return html.pre(html.quote(table.draw()))
 
 
+# TODO duel
 async def format_hits(hits: list[dict], last_hit_positions: list[int] = []) -> str:
     hits = sorted(hits, key=lambda hit: hit['position'])
     table = Texttable()

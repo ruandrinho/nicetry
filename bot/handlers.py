@@ -174,7 +174,7 @@ async def handle_interruption_cancel(callback: CallbackQuery, state: FSMContext)
 async def handle_query_main(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     user_data = await state.get_data()
     after_results = False
-    if 'round_is_finished' in user_data and user_data['round_is_finished']:
+    if user_data.get('round_is_finished'):
         await state.update_data(round_is_finished=False)
         after_results = True
     await callback.answer()
@@ -199,6 +199,7 @@ async def handle_query_rules(callback: CallbackQuery, state: FSMContext) -> None
     await callback.answer()
 
 
+# TODO duel rating button and handler
 @game_router.callback_query(Text('rating'), GameStates.main)
 async def handle_query_rating(callback: CallbackQuery, state: FSMContext) -> None:
     user_data = await state.get_data()
@@ -222,13 +223,14 @@ async def handle_query_rating(callback: CallbackQuery, state: FSMContext) -> Non
     await callback.answer()
 
 
+# TODO duel button and handler
 @game_router.callback_query(Text('game'), GameStates.main)
 @game_router.callback_query(Text('game_again'), GameStates.main)
 async def handle_query_game(callback: CallbackQuery, state: FSMContext, bot: Bot, after_results: bool = False) -> None:
     if await check_closed_game(callback.message, bot):
         return
     user_data = await state.get_data()
-    if 'round_is_finished' in user_data and user_data['round_is_finished']:
+    if user_data.get('round_is_finished'):
         await state.update_data(round_is_finished=False)
         after_results = True
     if 'challenged_topic_id' in user_data:
@@ -272,7 +274,7 @@ async def handle_query_game(callback: CallbackQuery, state: FSMContext, bot: Bot
     buttons.append(['main'])
     joined_topics = ', '.join(topic['title'] for topic in topics)
     new_message = await callback.message.answer(
-        Messages.choose_topic + joined_topics,
+        Messages.choose_topic.replace('TOPICS', joined_topics),
         reply_markup=await get_keyboard(buttons)
     )
     await state.update_data(new_message_id=new_message.message_id)
@@ -284,6 +286,7 @@ async def handle_query_game(callback: CallbackQuery, state: FSMContext, bot: Bot
     await state.set_state(GameStates.topic)
 
 
+# TODO duel topics list shortening
 @game_router.callback_query(Text(startswith='id'), GameStates.topic)
 async def handle_query_topic(callback: CallbackQuery, state: FSMContext) -> None:
     user_data = await state.get_data()
@@ -301,6 +304,7 @@ async def handle_query_topic(callback: CallbackQuery, state: FSMContext) -> None
     await state.set_state(GameStates.mode)
 
 
+# TODO duel
 @game_router.callback_query(Text(endswith='mode'), GameStates.mode)
 async def handle_query_mode(callback: CallbackQuery, state: FSMContext) -> None:
     hits_mode = callback.data == 'hits_mode'
@@ -345,6 +349,7 @@ async def handle_query_mode(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(GameStates.answer)
 
 
+# TODO duel
 @game_router.message(F.text, GameStates.answer)
 async def handle_message_answer(message: Message, state: FSMContext, bot: Bot) -> None:
     user_data = await state.get_data()
@@ -386,6 +391,7 @@ async def handle_message_answer(message: Message, state: FSMContext, bot: Bot) -
     await handle_bot_answer(message, state, bot, result)
 
 
+# TODO duel
 @game_router.callback_query(Text(startswith='id'), GameStates.answer)
 async def handle_query_answer(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     user_data = await state.get_data()
@@ -449,6 +455,7 @@ async def handle_bot_answer(message: Message, state: FSMContext, bot: Bot, resul
     await handle_results(message, state, bot)
 
 
+# TODO duel
 async def handle_hit(
         message: Message,
         state: FSMContext,
@@ -481,7 +488,7 @@ async def handle_hit(
         score2 = score2 + hit_record['points']
         hits2 += 1
         await state.update_data(score2=score2, hits2=hits2)
-    if 'last_hit_position' in user_data and user_data['last_hit_position']:
+    if user_data.get('last_hit_position'):
         last_hit_positions.append(user_data['last_hit_position'])
     await state.update_data(last_hit_position=None)
     new_message = await message.answer(await format_hits(hits, last_hit_positions=last_hit_positions))
@@ -489,12 +496,13 @@ async def handle_hit(
     with suppress(TelegramBadRequest):
         score_message = f'{hits1}:{hits2}' if user_data['hits_mode'] else f'{score1}:{score2}'
         await bot.edit_message_text(
-            text=html.bold(f'{score_message} | {user_data["topic_title"]}'),
+            text=html.bold(f'{score_message} • {user_data["topic_title"]}'),
             chat_id=message.chat.id,
             message_id=user_data['pinned_message_id']
         )
 
 
+# TODO duel
 async def handle_results(message: Message, state: FSMContext, bot: Bot) -> None:
     await state.set_state(GameStates.sleep)
     user_data = await state.get_data()
@@ -577,6 +585,7 @@ async def handle_feedback(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(GameStates.feedback)
 
 
+# TODO player2
 @game_router.message(F.text, GameStates.feedback)
 async def handle_feedback_message(message: Message, state: FSMContext) -> None:
     user_data = await state.get_data()
