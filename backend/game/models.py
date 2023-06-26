@@ -46,6 +46,7 @@ class TopicQuerySet(models.QuerySet):
     def assigned_to(self, player: 'Player'):
         return self.filter(id__in=player.assigned_topics.split())
 
+    # TODO 2 players
     def exclude_played_by(self, player: 'Player'):
         return self.exclude(
             id__in=Round.objects.filter(player1=player).values_list('topic_id')
@@ -84,10 +85,10 @@ class Topic(models.Model):
         return self.title
 
     @classmethod
-    def find(cls, id: int = 0, title: str = '') -> Optional['Topic']:
+    def find(cls, topic_id: int = 0, title: str = '') -> Optional['Topic']:
         try:
-            if id:
-                topic = cls.objects.get(id=id)
+            if topic_id:
+                topic = cls.objects.get(id=topic_id)
             else:
                 topic = cls.objects.get(title=title)
         except cls.DoesNotExist:
@@ -139,6 +140,7 @@ class Topic(models.Model):
             entity.position = i
         TopicEntity.objects.bulk_update(queryset, ['position'])
 
+    # TODO duels
     def update_statistics(self) -> None:
         self.average_score = self.rounds.finished().points_mode().aggregate(avg=Avg('score1'))['avg'] or 0
         self.average_score_hits_mode = self.rounds.finished().hits_mode().aggregate(avg=Avg('score1'))['avg'] or 0
@@ -290,13 +292,6 @@ class TopicEntity(models.Model):
     def __str__(self) -> str:
         return f'{self.topic} — {self.entity}'
 
-    @classmethod
-    def bulk_update_positions(cls, topic: Topic) -> None:
-        queryset = list(cls.objects.filter(topic=topic).order_by('-answers_count'))
-        for i, entity in enumerate(queryset, start=1):
-            entity.position = i
-        cls.objects.bulk_update(queryset, ['position'])
-
     def increment_answers_count(self) -> None:
         self.answers_count += 1
         self.save()
@@ -357,7 +352,7 @@ class Player(models.Model):
         return name
 
     @classmethod
-    def find(cls, **kwargs) -> Optional['Player']:
+    def find_or_create(cls, **kwargs) -> Optional['Player']:
         if 'player_id' in kwargs:
             try:
                 player = cls.objects.get(id=kwargs['player_id'])
@@ -387,6 +382,7 @@ class Player(models.Model):
         self.assigned_topics = ''
         self.save()
 
+    # TODO player 1 or 2, duel stats
     def update_statistics(self) -> int:
         finished_rounds = self.rounds.finished()
         average_score = finished_rounds.aggregate(avg=Avg('score1'))['avg'] or 0
@@ -429,6 +425,7 @@ class Player(models.Model):
 
 
 class RoundQuerySet(models.QuerySet):
+    # TODO player 1 or 2
     def defeats(self):
         points_mode_qs = self.filter(score1__lt=F('score2'), hits_mode=False)
         hits_mode_qs = self.filter(
@@ -454,6 +451,7 @@ class RoundQuerySet(models.QuerySet):
     def points_mode(self):
         return self.filter(hits_mode=False)
 
+    # TODO player 1 or 2
     def victories(self):
         points_mode_qs = self.filter(score1__gt=F('score2'), hits_mode=False)
         hits_mode_qs = self.filter(
@@ -484,8 +482,8 @@ class Round(models.Model):
     finished_at = models.DateTimeField('Окончание', null=True, blank=True)
     bot_answers = models.TextField('Возможные ответы бота', default='{}')
     declined_answers = models.TextField('Отклонённые ответы', default='[]')
-    player1_feedback = models.TextField('Обратная связь 1')
-    player2_feedback = models.TextField('Обратная связь 2')
+    feedback1 = models.TextField('Обратная связь 1')
+    feedback2 = models.TextField('Обратная связь 2')
     checked = models.BooleanField('Проверен', db_index=True, default=False)
 
     objects = RoundQuerySet.as_manager()
@@ -508,7 +506,7 @@ class Round(models.Model):
     @classmethod
     def set_checked(cls, ids: list[int]):
         cls.objects.filter(id__in=ids).update(checked=True)
-        Answer.objects.filter(round_id__in=ids).unbound().update(discarded=True)
+        Answer.discard_for_rounds(ids)
 
     def add_declined_answer(self, text: str, entity_title: str) -> None:
         declined_answers = json.loads(self.declined_answers)
@@ -517,9 +515,10 @@ class Round(models.Model):
         self.save()
 
     def add_feedback(self, feedback: str, player: int = 1) -> None:
-        setattr(self, f'player{player}_feedback', feedback)
+        setattr(self, f'feedback{player}', feedback)
         self.save()
 
+    # TODO abort from 1 or 2, player2
     def finish(
             self,
             score1: int = 0,
@@ -564,6 +563,7 @@ class Round(models.Model):
             self.bot_answers = self.topic.bot_answers
         self.save()
 
+    # TODO duels
     @property
     def attempt(self) -> int:
         return self.answers.filter(player=2).count() + 1
@@ -603,6 +603,7 @@ class AnswerQuerySet(models.QuerySet):
     def bound(self):
         return self.filter(topic_entity__isnull=False)
 
+    # TODO player2
     def by_player1(self):
         return self.filter(player=1)
 
@@ -648,6 +649,11 @@ class Answer(models.Model):
     def discard(cls, ids: list[int]):
         cls.objects.filter(id__in=ids).update(discarded=True)
 
+    @classmethod
+    def discard_for_rounds(cls, ids: list[int]):        
+        cls.objects.filter(round_id__in=ids).unbound().update(discarded=True)
+
+    # TODO player2
     @classmethod
     def get_or_create(
             cls,

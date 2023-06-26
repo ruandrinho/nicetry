@@ -43,7 +43,7 @@ class TopicAdmin(admin.ModelAdmin):
             return
         topic.gather_matches()
         topic.convert_bot_answers()
-        TopicEntity.bulk_update_positions(topic=topic)
+        topic.update_entities_positions()
 
 
 @admin.register(Entity)
@@ -66,13 +66,13 @@ class TopicEntityAdmin(admin.ModelAdmin):
     def save_model(self, request: Any, obj: TopicEntity, form: Any, change: Any) -> None:
         super().save_model(request, obj, form, change)
         obj.topic.gather_matches()
-        TopicEntity.bulk_update_positions(topic=obj.topic)
+        obj.topic.update_entities_positions()
 
     def delete_model(self, request: HttpRequest, obj: TopicEntity) -> None:
         topic = obj.topic
         super().delete_model(request, obj)
         topic.gather_matches()
-        TopicEntity.bulk_update_positions(topic=topic)
+        topic.update_entities_positions()
 
 
 class RoundInline(TabularInlinePaginated):
@@ -80,10 +80,10 @@ class RoundInline(TabularInlinePaginated):
     per_page = 20
     fk_name = 'player1'
     fields = [
-        'score1', 'score2', 'player1_answers', 'player2_answers', 'finished_at', 'player1_feedback', 'player2_feedback'
+        'score1', 'score2', 'player1_answers', 'player2_answers', 'finished_at', 'feedback1', 'feedback2'
     ]
     readonly_fields = [
-        'score1', 'score2', 'player1_answers', 'player2_answers', 'finished_at', 'player1_feedback', 'player2_feedback'
+        'score1', 'score2', 'player1_answers', 'player2_answers', 'finished_at', 'feedback1', 'feedback2'
     ]
     show_change_link = False
     extra = 0
@@ -95,8 +95,9 @@ class PlayerAdmin(admin.ModelAdmin):
     inlines = [RoundInline]
     raw_id_fields = ['referrer']
     readonly_fields = [
-        'telegram_id', 'telegram_username', 'name', 'victories', 'defeats', 'draws', 'average_score', 'rating', 'level',
-        'duel_victories', 'duel_defeats', 'duel_draws', 'duel_average_score', 'duel_rating', 'assigned_topics'
+        'telegram_id', 'telegram_username', 'name', 'victories', 'defeats', 'draws', 'average_score', 'rating', 
+        'best_rating', 'best_rating_reached_at', 'level', 'duel_victories', 'duel_defeats', 'duel_draws',
+        'duel_average_score', 'duel_rating', 'assigned_topics'
     ]
     search_fields = ['telegram_username', 'name']
     list_filter = ['level']
@@ -111,7 +112,7 @@ class RoundAdmin(admin.ModelAdmin):
     list_filter = ['started_at', 'finished_at']
     readonly_fields = [
         'player1', 'player2', 'topic', 'duel', 'hits_mode', 'score1', 'score2', 'hits1', 'hits2', 'player1_answers',
-        'player2_answers', 'finished_at', 'bot_answers', 'player1_feedback', 'player2_feedback'
+        'player2_answers', 'finished_at', 'bot_answers', 'feedback1', 'feedback2'
     ]
 
 

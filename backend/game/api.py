@@ -19,61 +19,6 @@ class Message404(Schema):
     detail: str
 
 
-class PlayerInSchema(Schema):
-    telegram_id: int = 1
-    telegram_username: Optional[str] = None
-    name: Optional[str] = None
-
-
-class PlayerOutSchema(Schema):
-    id: int
-    telegram_id: int
-    displayed_name: str
-    rating: int
-    position: int = None
-
-
-@router.get('/players', response={200: list[PlayerOutSchema]})
-def get_players(request, group: Optional[str] = None):
-    if not group or group == 'ALL':
-        return Player.objects.all()
-    if group == 'INACTIVE':
-        return Player.objects.inactive()
-
-
-@router.post('/player', response={200: PlayerOutSchema})
-def find_player(request, data: PlayerInSchema):
-    if not data.telegram_username:
-        data.telegram_username = ''
-    if not data.name:
-        data.name = ''
-    player = Player.find(
-        telegram_id=data.telegram_id,
-        telegram_username=data.telegram_username,
-        name=data.name
-    )
-    return player
-
-
-@router.get('/rating', response={200: list[PlayerOutSchema]})
-def get_rating(request):
-    return Player.objects.top(10)
-
-
-class ReferrerSchema(Schema):
-    player_id: int
-    referrer_id: int
-
-
-@router.put('/player', response={200: Message200, 404: Message404})
-def put_player(request, data: ReferrerSchema):
-    player = Player.find(id=data.player_id)
-    if not player.referrer:
-        player.referrer = Player.find(id=data.referrer_id)
-        player.save()
-    return {'detail': 'ok'}
-
-
 class TopicSchema(Schema):
     id: int
     title: str
@@ -81,13 +26,14 @@ class TopicSchema(Schema):
 
 @router.get('/topic', response={200: TopicSchema, 404: Message404})
 def get_topic(request, topic_id: int):
-    topic = Topic.find(id=topic_id)
+    topic = Topic.find(topic_id=topic_id)
     return topic
 
 
+# TODO duel
 @router.get('/random-topics', response={200: list[TopicSchema], 403: Message403})
 def get_random_topics(request, player_id: int):
-    player = Player.find(player_id=player_id)
+    player = Player.find_or_create(player_id=player_id)
     if player.assigned_topics:
         return list(Topic.objects.assigned_to(player))
     topics = Topic.objects.exclude_played_by(player)
@@ -98,6 +44,72 @@ def get_random_topics(request, player_id: int):
         random_topics = topics.random(Config.topics_count)
     player.assign_topics(random_topics)
     return list(random_topics)
+
+
+class EntitySchema(Schema):
+    id: int
+    title: str
+    pattern: str
+
+
+@router.get('/entities', response={200: list[EntitySchema]})
+def search_entities(request, term: str):
+    return Entity.objects.filter(title__icontains=term)
+
+
+class PlayerInSchema(Schema):
+    telegram_id: int = 1
+    telegram_username: Optional[str] = None
+    name: Optional[str] = None
+
+
+class PlayerOutSchema(Schema):
+    id: int
+    telegram_id: int
+    displayed_name: str
+    rating: int = 0
+    position: int = None
+
+
+@router.get('/players', response={200: list[PlayerOutSchema]})
+def get_players(request, group: Optional[str] = None):
+    if group == 'INACTIVE':
+        return Player.objects.inactive()
+    return Player.objects.all()
+
+
+# TODO duel rating
+@router.get('/rating', response={200: list[PlayerOutSchema]})
+def get_rating(request):
+    return Player.objects.top(10)
+
+
+@router.post('/player', response={200: PlayerOutSchema})
+def find_player(request, data: PlayerInSchema):
+    if not data.telegram_username:
+        data.telegram_username = ''
+    if not data.name:
+        data.name = ''
+    player = Player.find_or_create(
+        telegram_id=data.telegram_id,
+        telegram_username=data.telegram_username,
+        name=data.name
+    )
+    return player
+
+
+class ReferrerSchema(Schema):
+    player_id: int
+    referrer_id: int
+
+
+@router.put('/player', response={200: Message200, 404: Message404})
+def put_player(request, data: ReferrerSchema):
+    player = Player.find_or_create(player_id=data.player_id)
+    if not player.referrer:
+        player.referrer = Player.find_or_create(player_id=data.referrer_id)
+        player.save()
+    return {'detail': 'ok'}
 
 
 class RoundInSchema(Schema):
@@ -111,9 +123,10 @@ class RoundOutSchema(Schema):
     attempt: int = 0
 
 
+# TODO duel
 @router.post('/round', response={200: RoundOutSchema, 403: Message403, 404: Message404})
 def start_round(request, data: RoundInSchema):
-    player = Player.find(player_id=data.player_id)
+    player = Player.find_or_create(player_id=data.player_id)
     player.clear_assigned_topics()
     round, created = Round.objects.get_or_create(player1=player, topic_id=data.topic_id, hits_mode=data.hits_mode)
     if created:
@@ -132,6 +145,44 @@ class FeedbackSchema(Schema):
 def feedback(request, data: FeedbackSchema):
     round = get_object_or_404(Round, id=data.round_id)
     round.add_feedback(data.feedback, data.player)
+    return {'detail': 'ok'}
+
+
+class FinishSchema(Schema):
+    round_id: int
+    score1: int = 0
+    score2: int = 0
+    hits1: int = 0
+    hits2: int = 0
+    abort: bool = False
+
+
+class ResultSchema(Schema):
+    rating: int = 0
+    position: int = 0
+
+
+# TODO duel
+@router.post('/finish', response={200: ResultSchema, 404: Message404})
+def finish_round(request, data: FinishSchema):
+    round = get_object_or_404(Round, id=data.round_id)
+    rating, position = round.finish(
+        score1=data.score1,
+        score2=data.score2,
+        hits1=data.hits1,
+        hits2=data.hits2,
+        abort=data.abort
+    )
+    return {'rating': rating, 'position': position}
+
+
+class ObjectGroupModerationSchema(Schema):
+    ids: list[int]
+
+
+@router.post('check-rounds', response={200: Message200})
+def check_rounds(request, data: ObjectGroupModerationSchema):
+    Round.set_checked(data.ids)
     return {'detail': 'ok'}
 
 
@@ -157,6 +208,7 @@ class AttemptSchema(Schema):
     skipped: bool = False
 
 
+# TODO duel
 @router.post('/answer', response={200: AttemptSchema, 403: Message403, 404: Message404})
 def answer(request, data: AnswerSchema):
     round = get_object_or_404(Round, id=data.round_id)
@@ -231,6 +283,7 @@ def put_answer(request, data: AnswerModerationSchema):
         topic_entity = TopicEntity.objects.create(topic=answer.round.topic, entity=entity)
         answer.assign_topic_entity(topic_entity=topic_entity)
     elif data.entity_title and data.entity_pattern:
+        # TODO strange creation
         entity, created = Entity.objects.get_or_create(
             title=data.entity_title,
             defaults={'pattern': data.entity_pattern}
@@ -245,55 +298,7 @@ def put_answer(request, data: AnswerModerationSchema):
     return {'detail': 'ok'}
 
 
-class FinishSchema(Schema):
-    round_id: int
-    score1: int = 0
-    score2: int = 0
-    hits1: int = 0
-    hits2: int = 0
-    abort: bool = False
-
-
-class ResultSchema(Schema):
-    rating: int = 0
-    position: int = 0
-
-
-@router.post('/finish', response={200: ResultSchema, 404: Message404})
-def finish_round(request, data: FinishSchema):
-    round = get_object_or_404(Round, id=data.round_id)
-    rating, position = round.finish(
-        score1=data.score1,
-        score2=data.score2,
-        hits1=data.hits1,
-        hits2=data.hits2,
-        abort=data.abort
-    )
-    return {'rating': rating, 'position': position}
-
-
-class EntitySchema(Schema):
-    id: int
-    title: str
-    pattern: str
-
-
-@router.get('/entities', response={200: list[EntitySchema]})
-def search_entities(request, term: str):
-    return Entity.objects.filter(title__icontains=term)
-
-
-class ObjectGroupModerationSchema(Schema):
-    ids: list[int]
-
-
 @router.post('discard-answers', response={200: Message200})
 def discard_answers(request, data: ObjectGroupModerationSchema):
     Answer.discard(data.ids)
-    return {'detail': 'ok'}
-
-
-@router.post('check-rounds', response={200: Message200})
-def check_rounds(request, data: ObjectGroupModerationSchema):
-    Round.set_checked(data.ids)
     return {'detail': 'ok'}
