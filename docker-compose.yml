@@ -34,7 +34,7 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:latest
+    image: redis/redis-stack:latest
     ports:
       - "6379:6379"
     restart: unless-stopped

@@ -7,7 +7,7 @@ from typing import Optional
 
 from django.contrib import admin
 from django.db import models
-from django.db.models import Avg, F, Q
+from django.db.models import Avg, F, Q, Sum
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -15,11 +15,14 @@ import jellyfish
 
 
 class Config:
-    topics_count: int = 3
     attempts_count: int = 5
-    points: tuple[int] = (10, 9, 8, 7, 6, 5, 4, 3, 2, 1)
+    draw_rating_bonus = 20
+    fading_rating_coef = 0.03
     initial_rounds: int = 11
+    points: tuple[int] = (10, 9, 8, 7, 6, 5, 4, 3, 2, 1)
     topic_levels: tuple[int] = (0, 6, 12, 18, 24, 40)
+    topics_count: int = 3
+    victory_rating_bonus = 40
 
 
 def remove_successive_letters(s: str) -> str:
@@ -46,10 +49,9 @@ class TopicQuerySet(models.QuerySet):
     def assigned_to(self, player: 'Player'):
         return self.filter(id__in=player.assigned_topics.split())
 
-    # TODO 2 players
     def exclude_played_by(self, player: 'Player'):
         return self.exclude(
-            id__in=Round.objects.filter(player1=player).values_list('topic_id')
+            id__in=Round.objects.filter(Q(player1=player) | Q(player2=player)).values_list('topic_id')
         )
 
     def for_level(self, level: int):
@@ -317,7 +319,7 @@ class PlayerQuerySet(models.QuerySet):
 
 
 class Player(models.Model):
-    telegram_id = models.PositiveIntegerField('Telegram ID', unique=True)
+    telegram_id = models.PositiveBigIntegerField('Telegram ID', unique=True)
     telegram_username = models.CharField('Telegram Username', max_length=100)
     name = models.CharField('Имя', max_length=100)
     victories = models.PositiveSmallIntegerField('Число побед', default=0)
@@ -382,33 +384,49 @@ class Player(models.Model):
         self.assigned_topics = ''
         self.save()
 
-    # TODO player 1 or 2, duel stats
-    def update_statistics(self) -> int:
-        finished_rounds = self.rounds.finished()
-        average_score = finished_rounds.aggregate(avg=Avg('score1'))['avg'] or 0
-        self.average_score = round(average_score)
-        self.victories = finished_rounds.victories().count()
-        self.defeats = finished_rounds.defeats().count()
-        self.draws = finished_rounds.draws().count()
-        last10_rounds = self.rounds.last_finished(10)
-        rating = 0
-        for round_ in last10_rounds:
-            round_rating = round_.score1
-            if round_.outcome == '1':
-                round_rating += 40
-            elif round_.outcome == '=':
-                round_rating += 20
-            days = (timezone.now().date() - round_.finished_at.date()).days
-            aging_coef = max(0, 1 - days*0.03)
-            rating += round_rating * aging_coef
-        self.rating = round(rating)
-        for i, value in enumerate(Config.topic_levels):
-            if self.average_score < value:
-                self.level = i
-                break
-        if rating > self.best_rating:
-            self.best_rating = rating
-            self.best_rating_reached_at = timezone.now()
+    def update_statistics(self, full: bool = False) -> int:
+        if full or not self.rounds.last().duel:
+            finished_chatgpt_rounds = self.rounds.chatgpt().finished()
+            self.average_score = round(finished_chatgpt_rounds.aggregate(avg=Avg('score1'))['avg'] or 0)
+            self.victories = finished_chatgpt_rounds.victories().count()
+            self.defeats = finished_chatgpt_rounds.defeats().count()
+            self.draws = finished_chatgpt_rounds.draws().count()
+            rating = 0
+            for round_ in self.rounds.chatgpt().last_finished(10):
+                round_rating = round_.score1
+                if round_.outcome == '1':
+                    round_rating += Config.victory_rating_bonus
+                elif round_.outcome == '=':
+                    round_rating += Config.draw_rating_bonus
+                days = (timezone.now().date() - round_.finished_at.date()).days
+                aging_coef = max(0, 1 - days*Config.fading_rating_coef)
+                rating += round_rating * aging_coef
+            self.rating = round(rating)
+            for i, value in enumerate(Config.topic_levels):
+                if self.average_score < value:
+                    self.level = i
+                    break
+            if rating > self.best_rating:
+                self.best_rating = rating
+                self.best_rating_reached_at = timezone.now()
+            if not full:
+                self.save()
+                return self.rating
+
+        finished_duel1_rounds = self.rounds.duel().finished()
+        finished_duel2_rounds = self.guest_rounds.duel().finished()
+        self.duel_average_score = round(
+            (
+                (finished_duel1_rounds.aggregate(s=Sum['score1'])['s'] or 0) +
+                (finished_duel2_rounds.aggregate(s=Sum['score2'])['s'] or 0)
+            ) / (finished_duel1_rounds.count() + finished_duel2_rounds.count())
+        )
+        self.duel_victories = finished_duel1_rounds.victories(side=1).count() +\
+            finished_duel2_rounds.victories(side=2).count()
+        self.duel_defeats = finished_duel1_rounds.defeats(side=1).count() +\
+            finished_duel2_rounds.defeats(side=2).count()
+        self.duel_draws = finished_duel1_rounds.draws().count() + finished_duel2_rounds.draws().count()
+        # TODO duel elo rating
         self.save()
         return self.rating
 
@@ -420,16 +438,29 @@ class Player(models.Model):
         return displayed_name
 
     @property
+    def name_with_id(self) -> str:
+        return f'{self.displayed_name} id {self.id}'
+
+    @property
     def position(self) -> int:
         return Player.objects.filter(rating__gt=self.rating).count() + 1
 
 
 class RoundQuerySet(models.QuerySet):
-    # TODO player 1 or 2
-    def defeats(self):
-        points_mode_qs = self.filter(score1__lt=F('score2'), hits_mode=False)
+    def chatgpt(self):
+        return self.filter(duel=False)
+
+    def defeats(self, side: int = 1):
+        if side == 1:
+            points_mode_qs = self.filter(score1__lt=F('score2'), hits_mode=False)
+            hits_mode_qs = self.filter(
+                Q(hits1__lt=F('hits2')) | (Q(hits1=F('hits2')) & Q(score1__lt=F('score2'))),
+                hits_mode=True
+            )
+            return points_mode_qs | hits_mode_qs
+        points_mode_qs = self.filter(score2__lt=F('score1'), hits_mode=False)
         hits_mode_qs = self.filter(
-            Q(hits1__lt=F('hits2')) | (Q(hits1=F('hits2')) & Q(score1__lt=F('score2'))),
+            Q(hits2__lt=F('hits1')) | (Q(hits2=F('hits1')) & Q(score2__lt=F('score1'))),
             hits_mode=True
         )
         return points_mode_qs | hits_mode_qs
@@ -438,6 +469,9 @@ class RoundQuerySet(models.QuerySet):
         points_mode_qs = self.filter(score1=F('score2'), hits_mode=False)
         hits_mode_qs = self.filter(hits1=F('hits2'), score1=F('score2'), hits_mode=True)
         return points_mode_qs | hits_mode_qs
+
+    def duel(self):
+        return self.filter(duel=True)
 
     def finished(self):
         return self.filter(finished_at__isnull=False)
@@ -451,11 +485,17 @@ class RoundQuerySet(models.QuerySet):
     def points_mode(self):
         return self.filter(hits_mode=False)
 
-    # TODO player 1 or 2
-    def victories(self):
-        points_mode_qs = self.filter(score1__gt=F('score2'), hits_mode=False)
+    def victories(self, side: int = 1):
+        if side == 1:
+            points_mode_qs = self.filter(score1__gt=F('score2'), hits_mode=False)
+            hits_mode_qs = self.filter(
+                Q(hits1__gt=F('hits2')) | (Q(hits1=F('hits2')) & Q(score1__gt=F('score2'))),
+                hits_mode=True
+            )
+            return points_mode_qs | hits_mode_qs
+        points_mode_qs = self.filter(score2__gt=F('score1'), hits_mode=False)
         hits_mode_qs = self.filter(
-            Q(hits1__gt=F('hits2')) | (Q(hits1=F('hits2')) & Q(score1__gt=F('score2'))),
+            Q(hits2__gt=F('hits1')) | (Q(hits2=F('hits1')) & Q(score2__gt=F('score1'))),
             hits_mode=True
         )
         return points_mode_qs | hits_mode_qs
@@ -485,6 +525,7 @@ class Round(models.Model):
     feedback1 = models.TextField('Обратная связь 1')
     feedback2 = models.TextField('Обратная связь 2')
     checked = models.BooleanField('Проверен', db_index=True, default=False)
+    attempt = models.PositiveSmallIntegerField('Попытка', default=1)
 
     objects = RoundQuerySet.as_manager()
 
@@ -518,26 +559,30 @@ class Round(models.Model):
         setattr(self, f'feedback{player}', feedback)
         self.save()
 
-    # TODO abort from 1 or 2, player2
     def finish(
             self,
             score1: int = 0,
             score2: int = 0,
             hits1: int = 0,
             hits2: int = 0,
-            abort: bool = False
-    ) -> tuple[int, int]:
+            abort_side: int = 0
+    ) -> tuple[int, int, int, int]:
         if self.finished_at:
-            return
+            return 0, 0, 0, 0
         self.finished_at = timezone.now()
-        self.score1 = 0 if abort else score1
-        self.score2 = score2
-        self.hits1 = 0 if abort else hits1
-        self.hits2 = hits2
+        self.score1 = 0 if abort_side == 1 else score1
+        self.score2 = 0 if abort_side == 2 else score2
+        self.hits1 = 0 if abort_side == 2 else hits1
+        self.hits2 = 0 if abort_side == 2 else hits2
         self.save()
         self.topic.update_statistics()
-        rating = self.player1.update_statistics()
-        return rating, self.player1.position
+        rating1 = self.player1.update_statistics()
+        position1 = self.player1.position
+        rating2, position2 = 0, 0
+        if self.duel:
+            rating2 = self.player2.update_statistics()
+            position2 = self.player2.position
+        return rating1, position1, rating2, position2
 
     def get_bot_answer(self) -> tuple[str, TopicEntity]:
         bot_answers_slice = list(json.loads(self.bot_answers).items())[0:3]
@@ -562,11 +607,6 @@ class Round(models.Model):
         else:
             self.bot_answers = self.topic.bot_answers
         self.save()
-
-    # TODO duels
-    @property
-    def attempt(self) -> int:
-        return self.answers.filter(player=2).count() + 1
 
     @property
     def outcome(self, hits_mode: bool = False) -> str:
@@ -603,9 +643,11 @@ class AnswerQuerySet(models.QuerySet):
     def bound(self):
         return self.filter(topic_entity__isnull=False)
 
-    # TODO player2
     def by_player1(self):
         return self.filter(player=1)
+
+    def by_player2(self):
+        return self.filter(player=2)
 
     def unbound(self):
         return self.filter(topic_entity__isnull=True, discarded=False)
@@ -650,10 +692,9 @@ class Answer(models.Model):
         cls.objects.filter(id__in=ids).update(discarded=True)
 
     @classmethod
-    def discard_for_rounds(cls, ids: list[int]):        
+    def discard_for_rounds(cls, ids: list[int]):
         cls.objects.filter(round_id__in=ids).unbound().update(discarded=True)
 
-    # TODO player2
     @classmethod
     def get_or_create(
             cls,
@@ -669,13 +710,15 @@ class Answer(models.Model):
                 defaults={'player': player, 'text': text, 'position': topic_entity.position}
             )
             round.shorten_bot_answers(topic_entity.id)
-            if player == 1:
+            if player == 1 or round.duel:
                 topic_entity.increment_answers_count()
         else:
             _, created = cls.objects.get_or_create(
                 round=round,
                 text=text
             )
+        round.attempt += 1
+        round.save()
         return created
 
     def assign_topic_entity(self, topic_entity_id: int | None = None, topic_entity: TopicEntity | None = None) -> None:

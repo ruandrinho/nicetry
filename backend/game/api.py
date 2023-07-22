@@ -30,19 +30,27 @@ def get_topic(request, topic_id: int):
     return topic
 
 
-# TODO duel
 @router.get('/random-topics', response={200: list[TopicSchema], 403: Message403})
-def get_random_topics(request, player_id: int):
-    player = Player.find_or_create(player_id=player_id)
-    if player.assigned_topics:
-        return list(Topic.objects.assigned_to(player))
-    topics = Topic.objects.exclude_played_by(player)
+def get_random_topics(request, player1_id: int = 0, player2_id: int = 0):
+    player1 = Player.find_or_create(player_id=player1_id)
+    if not player2_id:
+        if player1.assigned_topics:
+            return list(Topic.objects.assigned_to(player1))
+        topics = Topic.objects.exclude_played_by(player1)
+        if not topics:
+            return 403, {'detail': 'Не осталось доступных тем для данного игрока'}
+        random_topics = topics.for_level(player1.level).random(Config.topics_count)
+        if random_topics.count() < Config.topics_count:
+            random_topics = topics.random(Config.topics_count)
+        player1.assign_topics(random_topics)
+        return list(random_topics)
+    player2 = Player.find_or_create(player_id=player2_id)
+    topics = Topic.objects.exclude_played_by(player1).exclude_played_by(player2)
     if not topics:
-        return 403, {'detail': 'Не осталось доступных тем для данного игрока'}
-    random_topics = topics.for_level(player.level).random(Config.topics_count)
+        return 403, {'detail': 'Не осталось доступных тем для данной пары игроков'}
+    random_topics = topics.for_level(player1.level).for_level(player2.level).random(Config.topics_count)
     if random_topics.count() < Config.topics_count:
         random_topics = topics.random(Config.topics_count)
-    player.assign_topics(random_topics)
     return list(random_topics)
 
 
@@ -67,6 +75,7 @@ class PlayerOutSchema(Schema):
     id: int
     telegram_id: int
     displayed_name: str
+    name_with_id: str
     rating: int = 0
     position: int = None
 
@@ -113,7 +122,8 @@ def put_player(request, data: ReferrerSchema):
 
 
 class RoundInSchema(Schema):
-    player_id: int
+    player1_id: int
+    player2_id: int
     topic_id: int
     hits_mode: bool = False
 
@@ -123,14 +133,25 @@ class RoundOutSchema(Schema):
     attempt: int = 0
 
 
-# TODO duel
 @router.post('/round', response={200: RoundOutSchema, 403: Message403, 404: Message404})
 def start_round(request, data: RoundInSchema):
-    player = Player.find_or_create(player_id=data.player_id)
-    player.clear_assigned_topics()
-    round, created = Round.objects.get_or_create(player1=player, topic_id=data.topic_id, hits_mode=data.hits_mode)
+    player1 = Player.find_or_create(player_id=data.player1_id)
+    if not data.player2_id:
+        player1.clear_assigned_topics()
+        round, created = Round.objects.get_or_create(player1=player1, topic_id=data.topic_id, hits_mode=data.hits_mode)
+        if created:
+            round.update_bot_answers()
+            return {'id': round.id}
+        return 403, {'detail': 'Тема уже сыграна'}
+    player2 = Player.find_or_create(player_id=data.player2_id)
+    round, created = Round.objects.get_or_create(
+        player1=player1,
+        player2=player2,
+        topic_id=data.topic_id,
+        hits_mode=data.hits_mode,
+        duel=True
+    )
     if created:
-        round.update_bot_answers()
         return {'id': round.id}
     return 403, {'detail': 'Тема уже сыграна'}
 
@@ -154,26 +175,27 @@ class FinishSchema(Schema):
     score2: int = 0
     hits1: int = 0
     hits2: int = 0
-    abort: bool = False
+    abort_side: int = 0
 
 
 class ResultSchema(Schema):
-    rating: int = 0
-    position: int = 0
+    rating1: int = 0
+    position1: int = 0
+    rating2: int = 0
+    position2: int = 0
 
 
-# TODO duel
 @router.post('/finish', response={200: ResultSchema, 404: Message404})
 def finish_round(request, data: FinishSchema):
     round = get_object_or_404(Round, id=data.round_id)
-    rating, position = round.finish(
+    rating1, position1, rating2, position2 = round.finish(
         score1=data.score1,
         score2=data.score2,
         hits1=data.hits1,
         hits2=data.hits2,
-        abort=data.abort
+        abort_side=data.abort_side
     )
-    return {'rating': rating, 'position': position}
+    return {'rating1': rating1, 'position1': position1, 'rating2': rating2, 'position2': position2}
 
 
 class ObjectGroupModerationSchema(Schema):
@@ -190,6 +212,7 @@ class AnswerSchema(Schema):
     round_id: int
     answer: str
     entity_id: int = None
+    side: int = 1
 
 
 class TopicEntitySchema(Schema):
@@ -200,15 +223,18 @@ class TopicEntitySchema(Schema):
     # share: float
 
 
+class ChatgptAnswerSchema(Schema):
+    text: str
+    entity: TopicEntitySchema = None
+
+
 class AttemptSchema(Schema):
     attempt: int = 0
     entities: list[TopicEntitySchema] = None
-    bot_answer: str = None
-    bot_answer_entity: TopicEntitySchema = None
     skipped: bool = False
+    chatgpt_answer: ChatgptAnswerSchema = None
 
 
-# TODO duel
 @router.post('/answer', response={200: AttemptSchema, 403: Message403, 404: Message404})
 def answer(request, data: AnswerSchema):
     round = get_object_or_404(Round, id=data.round_id)
@@ -217,43 +243,64 @@ def answer(request, data: AnswerSchema):
 
     if data.entity_id:
         topic_entity = get_object_or_404(TopicEntity, id=data.entity_id)
-        created = Answer.get_or_create(round=round, topic_entity=topic_entity, text=data.answer)
+        created = Answer.get_or_create(round=round, topic_entity=topic_entity, text=data.answer, player=data.side)
         if not created:
             round.add_declined_answer(data.answer, 'CHOICE REPEAT')
             return 403, {'detail': 'Этот ответ засчитан, введите другой'}
-        bot_answer, bot_answer_entity = round.get_bot_answer()
+        if not round.duel:
+            chatgpt_answer, chatgpt_answer_entity = round.get_bot_answer()
+            return {
+                'attempt': round.attempt,
+                'entities': [topic_entity],
+                'chatgpt_answer': {
+                    'text': chatgpt_answer,
+                    'entity': chatgpt_answer_entity
+                }
+            }
         return {
             'attempt': round.attempt,
-            'entities': [topic_entity],
-            'bot_answer': bot_answer,
-            'bot_answer_entity': bot_answer_entity
+            'entities': [topic_entity]
         }
 
     topic_entities = round.topic.get_matching_entities(data.answer) if not skipped else None
     if not topic_entities:
         if not skipped:
-            created = Answer.get_or_create(round=round, text=data.answer)
+            created = Answer.get_or_create(round=round, text=data.answer, player=data.side)
             if not created:
                 round.add_declined_answer(data.answer, 'NEW REPEAT')
                 return 403, {'detail': 'Этот ответ засчитан, введите другой'}
-        bot_answer, bot_answer_entity = round.get_bot_answer()
+        if not round.duel:
+            chatgpt_answer, chatgpt_answer_entity = round.get_bot_answer()
+            return {
+                'attempt': round.attempt,
+                'skipped': skipped,
+                'chatgpt_answer': {
+                    'text': chatgpt_answer,
+                    'entity': chatgpt_answer_entity
+                }
+            }
         return {
             'attempt': round.attempt,
-            'bot_answer': bot_answer,
-            'bot_answer_entity': bot_answer_entity,
             'skipped': skipped
         }
     elif len(topic_entities) == 1:
-        created = Answer.get_or_create(round=round, topic_entity=topic_entities[0], text=data.answer)
+        created = Answer.get_or_create(round=round, topic_entity=topic_entities[0], text=data.answer, player=data.side)
         if not created:
             round.add_declined_answer(data.answer, topic_entities[0].entity.title)
             return 403, {'detail': 'Этот ответ засчитан, введите другой'}
-        bot_answer, bot_answer_entity = round.get_bot_answer()
+        if not round.duel:
+            chatgpt_answer, chatgpt_answer_entity = round.get_bot_answer()
+            return {
+                'attempt': round.attempt,
+                'entities': topic_entities,
+                'chatgpt_answer': {
+                    'text': chatgpt_answer,
+                    'entity': chatgpt_answer_entity
+                }
+            }
         return {
             'attempt': round.attempt,
-            'entities': topic_entities,
-            'bot_answer': bot_answer,
-            'bot_answer_entity': bot_answer_entity
+            'entities': topic_entities
         }
 
     return {
